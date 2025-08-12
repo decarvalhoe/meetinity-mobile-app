@@ -1,16 +1,11 @@
-import React, { useState } from 'react'
-import Home from './Home'
-import Auth from './Auth'
+import React from 'react'
+import { AuthProvider } from './auth/AuthContext'
+import AppRouter from './router/AppRouter'
 
-function App() {
-  const [token, setToken] = useState<string | null>(localStorage.getItem('authToken'))
-
-  const handleAuth = (newToken: string) => {
-    localStorage.setItem('authToken', newToken)
-    setToken(newToken)
-  }
-
-  return token ? <Home /> : <Auth onAuth={handleAuth} />
-}
+const App: React.FC = () => (
+  <AuthProvider>
+    <AppRouter />
+  </AuthProvider>
+)
 
 export default App
