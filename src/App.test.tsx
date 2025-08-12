@@ -1,14 +1,19 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import App from './App'
 
-test('renders Meetinity title', () => {
-  render(<App />)
-  const titleElement = screen.getByText(/Meetinity Mobile App/i)
-  expect(titleElement).toBeInTheDocument()
+beforeEach(() => {
+  localStorage.clear()
 })
 
-test('renders features list', () => {
+test('shows auth when not authenticated', () => {
   render(<App />)
-  const swipeFeature = screen.getByText(/Swipe profiles/i)
-  expect(swipeFeature).toBeInTheDocument()
+  expect(screen.getByText(/Sign in with Google/i)).toBeInTheDocument()
+})
+
+test('sign in stores token and shows home', () => {
+  render(<App />)
+  fireEvent.click(screen.getByText(/Sign in with Google/i))
+  expect(localStorage.getItem('authToken')).toBe('google-mock-token')
+  expect(screen.getByText(/Meetinity Mobile App/i)).toBeInTheDocument()
+  expect(screen.getByText(/Swipe profiles/i)).toBeInTheDocument()
 })
