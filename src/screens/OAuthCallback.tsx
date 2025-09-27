@@ -14,10 +14,8 @@ const OAuthCallback: React.FC = () => {
     const state = params.get('state')
     if (code && state) {
       AuthService.handleCallback({ code, state })
-        .then(async (token) => {
-          await setToken(token)
-          navigate('/profile')
-        })
+        .then((token) => setToken(token))
+        .then(() => navigate('/profile'))
         .catch(() => navigate('/login'))
     } else {
       navigate('/login')
