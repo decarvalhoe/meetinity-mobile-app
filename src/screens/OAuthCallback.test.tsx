@@ -10,8 +10,16 @@ vi.mock('../services/AuthService')
 const mockedHandle = AuthService.handleCallback as unknown as vi.Mock
 mockedHandle.mockResolvedValue('token123')
 
-test('handles callback and redirects to profile', async () => {
-  const setToken = vi.fn().mockResolvedValue(undefined)
+test('handles callback and redirects to profile after token persistence', async () => {
+  let resolveToken: (() => void) | undefined
+  const setToken = vi
+    .fn()
+    .mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveToken = resolve
+        }),
+    )
   render(
     <AuthContext.Provider value={{ token: null, user: null, login: vi.fn(), setToken, logout: vi.fn() }}>
       <MemoryRouter initialEntries={['/auth/callback?code=abc&state=def']}>
@@ -25,5 +33,9 @@ test('handles callback and redirects to profile', async () => {
   )
 
   await waitFor(() => expect(setToken).toHaveBeenCalledWith('token123'))
-  expect(screen.getByText('Profile')).toBeInTheDocument()
+  expect(screen.queryByText('Profile')).not.toBeInTheDocument()
+
+  resolveToken?.()
+
+  await waitFor(() => expect(screen.getByText('Profile')).toBeInTheDocument())
 })
