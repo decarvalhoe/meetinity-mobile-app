@@ -8,7 +8,11 @@ import AuthService from '../services/AuthService'
 vi.mock('../services/AuthService')
 
 const mockedHandle = AuthService.handleCallback as unknown as vi.Mock
-mockedHandle.mockResolvedValue('token123')
+
+beforeEach(() => {
+  mockedHandle.mockReset()
+  mockedHandle.mockResolvedValue('token123')
+})
 
 test('handles callback and redirects to profile', async () => {
   const setToken = vi.fn().mockResolvedValue(undefined)
@@ -24,6 +28,11 @@ test('handles callback and redirects to profile', async () => {
     </AuthContext.Provider>
   )
 
-  await waitFor(() => expect(setToken).toHaveBeenCalledWith('token123'))
-  expect(screen.getByText('Profile')).toBeInTheDocument()
+  await waitFor(() => {
+    expect(mockedHandle).toHaveBeenCalledTimes(1)
+    expect(setToken).toHaveBeenCalledWith('token123')
+  })
+
+  expect(setToken).toHaveBeenCalledTimes(1)
+  await waitFor(() => expect(screen.getByText('Profile')).toBeInTheDocument())
 })
