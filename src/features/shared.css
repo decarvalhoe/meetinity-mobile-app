@@ -199,6 +199,74 @@
   border: 1px solid var(--border, #e5e7eb);
 }
 
+.swipe-carousel {
+  position: relative;
+  display: grid;
+  gap: 16px;
+}
+
+.swipe-carousel__card {
+  position: relative;
+}
+
+.swipe-carousel__actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.notice {
+  background: var(--chip, #ede9fe);
+  color: var(--primary, #6c5ce7);
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.empty-state {
+  display: grid;
+  gap: 12px;
+  text-align: center;
+  padding: 32px 16px;
+  background: var(--surface, #ffffff);
+  border-radius: 16px;
+  border: 1px solid var(--border, #e5e7eb);
+}
+
+.hint {
+  margin: 0;
+  color: var(--muted, #6b7280);
+  font-size: 14px;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1000;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 360px;
+  width: 100%;
+  display: grid;
+  gap: 12px;
+  text-align: center;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
+}
+
+.modal__actions {
+  display: flex;
+  justify-content: center;
+}
+
 .message--outgoing {
   background: rgba(108, 92, 231, 0.1);
   border-color: rgba(108, 92, 231, 0.4);

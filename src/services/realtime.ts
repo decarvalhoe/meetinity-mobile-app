@@ -1,8 +1,8 @@
 import type { Message } from '../features/messaging/types'
-import type { MatchSuggestion } from '../features/discovery/types'
+import type { MatchFeedItem } from '../features/discovery/types'
 
 export type RealtimeMessageHandler = (message: Message) => void
-export type RealtimeMatchesHandler = (matches: MatchSuggestion[]) => void
+export type RealtimeMatchesHandler = (matches: MatchFeedItem[]) => void
 
 interface RealtimeTransportHandlers {
   onMessage: RealtimeMessageHandler
@@ -38,7 +38,7 @@ export const createRealtimeClient = (token: string, options?: { baseUrl?: string
   const emitMessage = (message: Message) => {
     messageListeners.forEach((listener) => listener(message))
   }
-  const emitMatches = (matches: MatchSuggestion[]) => {
+  const emitMatches = (matches: MatchFeedItem[]) => {
     matchesListeners.forEach((listener) => listener(matches))
   }
 
@@ -72,7 +72,7 @@ export const createRealtimeClient = (token: string, options?: { baseUrl?: string
       })
       eventSource.addEventListener('matches', (event) => {
         try {
-          const payload = JSON.parse((event as MessageEvent).data) as MatchSuggestion[]
+          const payload = JSON.parse((event as MessageEvent).data) as MatchFeedItem[]
           emitMatches(payload)
         } catch (error) {
           handlers.onError?.(error as Error)
@@ -88,7 +88,7 @@ export const createRealtimeClient = (token: string, options?: { baseUrl?: string
         try {
           const data = JSON.parse(event.data)
           if (Array.isArray(data)) {
-            emitMatches(data as MatchSuggestion[])
+            emitMatches(data as MatchFeedItem[])
           } else {
             emitMessage(data as Message)
           }

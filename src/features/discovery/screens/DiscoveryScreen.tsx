@@ -1,10 +1,23 @@
-import React, { useEffect } from 'react'
-import MatchCard from '../components/MatchCard'
+import React, { useMemo, useEffect } from 'react'
+import SwipeCarousel from '../components/SwipeCarousel'
+import MatchDialog from '../components/MatchDialog'
 import { useAppStore } from '../../../store/AppStore'
 import '../../shared.css'
 
 const DiscoveryScreen: React.FC = () => {
-  const { state, refreshMatches, acceptMatch, declineMatch } = useAppStore()
+  const { state, refreshMatches } = useAppStore()
+
+  const lastUpdated = useMemo(() => {
+    if (!state.matchFeedMeta?.fetchedAt) return null
+    try {
+      return new Date(state.matchFeedMeta.fetchedAt).toLocaleString('fr-FR')
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn('Unable to format match feed timestamp', error)
+      }
+      return state.matchFeedMeta.fetchedAt
+    }
+  }, [state.matchFeedMeta?.fetchedAt])
 
   useEffect(() => {
     if (state.matches.status === 'idle') {
@@ -12,38 +25,17 @@ const DiscoveryScreen: React.FC = () => {
     }
   }, [state.matches.status, refreshMatches])
 
-  if (state.matches.status === 'loading' && state.matches.data.length === 0) {
-    return <div className="loading">Recherche de profils pertinents…</div>
-  }
-
-  if (state.matches.status === 'error') {
-    return (
-      <div className="error-state" role="alert">
-        Impossible de récupérer les matchs. <button onClick={refreshMatches}>Réessayer</button>
-      </div>
-    )
-  }
-
   return (
     <section aria-labelledby="discovery-title">
+      <MatchDialog />
       <header className="section-header">
         <h1 id="discovery-title">Découverte</h1>
         <button type="button" className="secondary" onClick={refreshMatches}>
           Rafraîchir
         </button>
       </header>
-      {state.matches.data.length === 0 ? (
-        <p className="loading">Aucun profil ne correspond à vos critères pour le moment.</p>
-      ) : (
-        state.matches.data.map((suggestion) => (
-          <MatchCard
-            key={suggestion.id}
-            suggestion={suggestion}
-            onAccept={acceptMatch}
-            onDecline={declineMatch}
-          />
-        ))
-      )}
+      {lastUpdated && <p className="hint">Dernière mise à jour : {lastUpdated}</p>}
+      <SwipeCarousel />
     </section>
   )
 }
