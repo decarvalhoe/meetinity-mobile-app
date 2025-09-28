@@ -1,10 +1,13 @@
 import React from 'react'
 import { AuthProvider } from './auth/AuthContext'
 import AppRouter from './router/AppRouter'
+import { AppStoreProvider } from './store/AppStore'
 
 const App: React.FC = () => (
   <AuthProvider>
-    <AppRouter />
+    <AppStoreProvider>
+      <AppRouter />
+    </AppStoreProvider>
   </AuthProvider>
 )
 
