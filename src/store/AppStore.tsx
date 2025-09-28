@@ -15,12 +15,22 @@ import type {
   EventListFilters,
   EventSummary,
 } from '../features/events/types'
-import type { Conversation, Message } from '../features/messaging/types'
+import type {
+  Attachment,
+  Conversation,
+  Message,
+  PresenceUpdate,
+  QueuedMessage,
+} from '../features/messaging/types'
 import profileService from '../services/profileService'
 import matchingService from '../services/matchingService'
 import eventsService from '../services/eventsService'
 import messagingService from '../services/messagingService'
-import { createRealtimeClient } from '../services/realtime'
+import {
+  createRealtimeMessaging,
+  type MessagingSessionSnapshot,
+  type RealtimeMessaging,
+} from '../services/realtimeMessaging'
 
 const STORAGE_KEY = 'meetinity-app-store'
 
@@ -41,6 +51,21 @@ interface EventListState {
   filters: EventListFilters
 }
 
+interface PresenceStateEntry {
+  status: PresenceUpdate['status']
+  lastSeenAt: string
+  conversationId?: string
+}
+
+interface MessagingRealtimeState {
+  status: MessagingSessionSnapshot['status']
+  sessionId: string | null
+  since: string | null
+  presence: Record<string, PresenceStateEntry>
+}
+
+interface PendingMessageState extends QueuedMessage {}
+
 interface PendingEventRegistration {
   id: string
   eventId: string
@@ -58,6 +83,8 @@ interface AppState {
   conversations: ResourceState<Conversation[]>
   messages: Record<string, Message[]>
   activeConversationId: string | null
+  pendingMessages: PendingMessageState[]
+  messagingRealtime: MessagingRealtimeState
   matchFeedMeta: MatchFeedMeta | null
   pendingMatchActions: PendingSwipeAction[]
   matchNotifications: MatchFeedItem[]
@@ -75,6 +102,8 @@ const createInitialState = (): AppState => ({
   conversations: { status: 'idle', data: [] },
   messages: {},
   activeConversationId: null,
+  pendingMessages: [],
+  messagingRealtime: { status: 'disconnected', sessionId: null, since: null, presence: {} },
   matchFeedMeta: null,
   pendingMatchActions: [],
   matchNotifications: [],
@@ -107,9 +136,18 @@ type AppAction =
   | { type: 'conversations/loading' }
   | { type: 'conversations/success'; payload: Conversation[] }
   | { type: 'conversations/error'; error: string }
+  | { type: 'conversations/unread'; payload: { conversationId: string; unreadCount: number } }
   | { type: 'messages/append'; payload: Message }
   | { type: 'messages/hydrate'; payload: { conversationId: string; messages: Message[] } }
+  | { type: 'messages/replace'; payload: { conversationId: string; clientGeneratedId: string; message: Message } }
+  | { type: 'messages/receipt'; payload: { conversationId: string; messageId: string; status: Message['status'] } }
+  | { type: 'messages/queue/add'; payload: PendingMessageState }
+  | { type: 'messages/queue/update'; payload: { id: string; patch: Partial<PendingMessageState> } }
+  | { type: 'messages/queue/remove'; payload: string }
+  | { type: 'messages/read'; payload: { conversationId: string } }
   | { type: 'activeConversation/set'; payload: string | null }
+  | { type: 'presence/update'; payload: PresenceUpdate }
+  | { type: 'realtime/session'; payload: MessagingSessionSnapshot }
 
 const reducer = (state: AppState, action: AppAction): AppState => {
   switch (action.type) {
@@ -273,29 +311,203 @@ const reducer = (state: AppState, action: AppAction): AppState => {
     case 'conversations/loading':
       return { ...state, conversations: { ...state.conversations, status: 'loading', error: undefined } }
     case 'conversations/success':
-      return { ...state, conversations: { status: 'success', data: action.payload } }
+      return { ...state, conversations: { status: 'success', data: sortConversationsByUpdate(action.payload) } }
     case 'conversations/error':
       return { ...state, conversations: { ...state.conversations, status: 'error', error: action.error } }
+    case 'conversations/unread':
+      if (state.conversations.status !== 'success') return state
+      return {
+        ...state,
+        conversations: {
+          ...state.conversations,
+          data: state.conversations.data.map((conversation) =>
+            conversation.id === action.payload.conversationId
+              ? { ...conversation, unreadCount: action.payload.unreadCount }
+              : conversation,
+          ),
+        },
+      }
     case 'messages/append': {
-      const existing = state.messages[action.payload.conversationId] ?? []
+      const message = action.payload
+      const existing = state.messages[message.conversationId] ?? []
+      const messages = upsertMessage(existing, message)
+      const latest = messages[messages.length - 1]
+      const pendingMessages = message.clientGeneratedId
+        ? state.pendingMessages.filter((item) => item.clientGeneratedId !== message.clientGeneratedId)
+        : state.pendingMessages
+      const conversations =
+        state.conversations.status === 'success'
+          ? sortConversationsByUpdate(
+              state.conversations.data.map((conversation) => {
+                if (conversation.id !== message.conversationId) return conversation
+                const isOwnMessage = message.senderId === state.profile.data?.id
+                const currentLast = conversation.lastMessage
+                const shouldUpdate =
+                  !currentLast || new Date(latest.createdAt).getTime() >= new Date(currentLast.createdAt).getTime()
+                return shouldUpdate
+                  ? updateConversationPreview(
+                      conversation,
+                      latest,
+                      Boolean(isOwnMessage),
+                      state.activeConversationId === message.conversationId,
+                    )
+                  : conversation
+              }),
+            )
+          : state.conversations.data
       return {
         ...state,
         messages: {
           ...state.messages,
-          [action.payload.conversationId]: [...existing, action.payload],
+          [message.conversationId]: messages,
         },
+        conversations: state.conversations.status === 'success'
+          ? { status: 'success', data: conversations }
+          : state.conversations,
+        pendingMessages,
       }
     }
     case 'messages/hydrate':
+      if (action.payload.messages.length === 0) {
+        return {
+          ...state,
+          messages: { ...state.messages, [action.payload.conversationId]: [] },
+        }
+      }
+      if (state.conversations.status === 'success') {
+        const lastMessage = action.payload.messages[action.payload.messages.length - 1]
+        const conversations = sortConversationsByUpdate(
+          state.conversations.data.map((conversation) => {
+            if (conversation.id !== action.payload.conversationId) return conversation
+            return updateConversationPreview(
+              conversation,
+              lastMessage,
+              lastMessage.senderId === state.profile.data?.id,
+              state.activeConversationId === action.payload.conversationId,
+            )
+          }),
+        )
+        return {
+          ...state,
+          conversations: { status: 'success', data: conversations },
+          messages: {
+            ...state.messages,
+            [action.payload.conversationId]: sortMessages(action.payload.messages),
+          },
+        }
+      }
       return {
         ...state,
         messages: {
           ...state.messages,
-          [action.payload.conversationId]: action.payload.messages,
+          [action.payload.conversationId]: sortMessages(action.payload.messages),
         },
       }
+    case 'messages/replace': {
+      const existing = state.messages[action.payload.conversationId] ?? []
+      const replaced = upsertMessage(existing, action.payload.message)
+      const conversations =
+        state.conversations.status === 'success'
+          ? sortConversationsByUpdate(
+              state.conversations.data.map((conversation) => {
+                if (conversation.id !== action.payload.conversationId) return conversation
+                return updateConversationPreview(
+                  conversation,
+                  replaced[replaced.length - 1],
+                  action.payload.message.senderId === state.profile.data?.id,
+                  state.activeConversationId === action.payload.conversationId,
+                )
+              }),
+            )
+          : state.conversations.data
+      return {
+        ...state,
+        pendingMessages: state.pendingMessages.filter((item) => item.clientGeneratedId !== action.payload.clientGeneratedId),
+        messages: {
+          ...state.messages,
+          [action.payload.conversationId]: replaced,
+        },
+        conversations: state.conversations.status === 'success'
+          ? { status: 'success', data: conversations }
+          : state.conversations,
+      }
+    }
+    case 'messages/receipt': {
+      const existing = state.messages[action.payload.conversationId] ?? []
+      const messages = existing.map((message) =>
+        message.id === action.payload.messageId ? { ...message, status: action.payload.status } : message,
+      )
+      return {
+        ...state,
+        messages: {
+          ...state.messages,
+          [action.payload.conversationId]: messages,
+        },
+      }
+    }
+    case 'messages/queue/add': {
+      const existingIndex = state.pendingMessages.findIndex((item) => item.id === action.payload.id)
+      if (existingIndex !== -1) {
+        const pending = [...state.pendingMessages]
+        pending[existingIndex] = { ...pending[existingIndex], ...action.payload }
+        return { ...state, pendingMessages: pending }
+      }
+      return { ...state, pendingMessages: [...state.pendingMessages, action.payload] }
+    }
+    case 'messages/queue/update':
+      return {
+        ...state,
+        pendingMessages: state.pendingMessages.map((item) =>
+          item.id === action.payload.id ? { ...item, ...action.payload.patch } : item,
+        ),
+      }
+    case 'messages/queue/remove':
+      return {
+        ...state,
+        pendingMessages: state.pendingMessages.filter((item) => item.id !== action.payload),
+      }
+    case 'messages/read': {
+      const existing = state.messages[action.payload.conversationId] ?? []
+      const messages = existing.map((message) =>
+        message.senderId === state.profile.data?.id ? message : { ...message, status: 'read' },
+      )
+      return {
+        ...state,
+        messages: {
+          ...state.messages,
+          [action.payload.conversationId]: messages,
+        },
+      }
+    }
     case 'activeConversation/set':
       return { ...state, activeConversationId: action.payload }
+    case 'presence/update': {
+      const presence: PresenceStateEntry = {
+        status: action.payload.status,
+        lastSeenAt: action.payload.at,
+        conversationId: action.payload.conversationId,
+      }
+      return {
+        ...state,
+        messagingRealtime: {
+          ...state.messagingRealtime,
+          presence: {
+            ...state.messagingRealtime.presence,
+            [action.payload.participantId]: presence,
+          },
+        },
+      }
+    }
+    case 'realtime/session':
+      return {
+        ...state,
+        messagingRealtime: {
+          ...state.messagingRealtime,
+          status: action.payload.status,
+          sessionId: action.payload.id,
+          since: action.payload.since,
+        },
+      }
     default:
       return state
   }
@@ -312,8 +524,11 @@ interface AppStoreValue {
   toggleEventRegistration: (eventId: string, register: boolean) => Promise<void>
   loadEventDetails: (eventId: string, options?: { force?: boolean }) => Promise<EventDetails | undefined>
   refreshConversations: () => Promise<void>
-  loadMessages: (conversationId: string) => Promise<void>
-  sendMessage: (conversationId: string, content: string) => Promise<void>
+  loadMessages: (conversationId: string, options?: { force?: boolean }) => Promise<void>
+  sendMessage: (conversationId: string, content: string, attachments?: Attachment[]) => Promise<void>
+  markConversationRead: (conversationId: string) => void
+  retryMessage: (queuedMessageId: string) => void
+  setTypingState: (conversationId: string, typing: boolean) => void
   setActiveConversation: (conversationId: string | null) => void
   acknowledgeMatchNotification: (matchId: string) => void
 }
@@ -337,6 +552,15 @@ const hydrateState = (): AppState => {
       conversations: parsed.conversations ?? base.conversations,
       messages: parsed.messages ?? base.messages,
       activeConversationId: parsed.activeConversationId ?? base.activeConversationId,
+      pendingMessages: parsed.pendingMessages ?? base.pendingMessages,
+      messagingRealtime: parsed.messagingRealtime
+        ? {
+            status: parsed.messagingRealtime.status ?? base.messagingRealtime.status,
+            sessionId: parsed.messagingRealtime.sessionId ?? base.messagingRealtime.sessionId,
+            since: parsed.messagingRealtime.since ?? base.messagingRealtime.since,
+            presence: parsed.messagingRealtime.presence ?? base.messagingRealtime.presence,
+          }
+        : base.messagingRealtime,
       matchFeedMeta: parsed.matchFeedMeta ?? base.matchFeedMeta,
       pendingMatchActions: parsed.pendingMatchActions ?? base.pendingMatchActions,
       matchNotifications: parsed.matchNotifications ?? base.matchNotifications,
@@ -454,6 +678,39 @@ const detectNewMatches = (previous: MatchFeedItem[], next: MatchFeedItem[]): Mat
   return next.filter((item) => item.status === 'matched' && !previousMatched.has(item.id))
 }
 
+const sortMessages = (messages: Message[]): Message[] =>
+  [...messages].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+
+const upsertMessage = (messages: Message[], incoming: Message): Message[] => {
+  const index = messages.findIndex(
+    (message) => message.id === incoming.id || (incoming.clientGeneratedId && message.clientGeneratedId === incoming.clientGeneratedId),
+  )
+  if (index === -1) {
+    return sortMessages([...messages, incoming])
+  }
+  const updated = [...messages]
+  updated[index] = { ...updated[index], ...incoming }
+  return sortMessages(updated)
+}
+
+const sortConversationsByUpdate = (conversations: Conversation[]): Conversation[] =>
+  [...conversations].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+
+const updateConversationPreview = (
+  conversation: Conversation,
+  message: Message,
+  isOwnMessage: boolean,
+  isActive: boolean,
+): Conversation => {
+  const unreadIncrement = isOwnMessage || isActive ? 0 : 1
+  return {
+    ...conversation,
+    lastMessage: message,
+    updatedAt: message.createdAt,
+    unreadCount: Math.max(0, conversation.unreadCount + unreadIncrement),
+  }
+}
+
 const isOfflineError = (error: unknown): boolean => {
   if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && navigator.onLine === false) {
     return true
@@ -496,7 +753,7 @@ const applyDecisionToMatches = (
   })
 
 export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { token } = useAuth()
+  const { token, user } = useAuth()
   const [state, dispatch] = useReducer(reducer, undefined, hydrateState)
 
   const triggerMatchNotifications = useCallback(
@@ -525,6 +782,7 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const matchesRef = useRef<MatchFeedItem[]>(state.matches.data)
 
   const eventsStateRef = useRef<EventListState>(state.events.data)
+  const conversationsRef = useRef<Conversation[]>(state.conversations.data)
 
   useEffect(() => {
     matchesRef.current = state.matches.data
@@ -533,6 +791,18 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     eventsStateRef.current = state.events.data
   }, [state.events.data])
+
+  useEffect(() => {
+    conversationsRef.current = state.conversations.data
+  }, [state.conversations.data])
+
+  const pendingMessagesRef = useRef<PendingMessageState[]>(state.pendingMessages)
+  useEffect(() => {
+    pendingMessagesRef.current = state.pendingMessages
+  }, [state.pendingMessages])
+
+  const realtimeMessagingRef = useRef<RealtimeMessaging | null>(null)
+  const isProcessingQueueRef = useRef(false)
 
   const commitMatches = useCallback(
     (
@@ -575,6 +845,57 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (typeof window === 'undefined') return
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
   }, [state])
+
+  const processMessageQueue = useCallback(async () => {
+    if (!token) return
+    if (isProcessingQueueRef.current) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+    const pending = pendingMessagesRef.current.filter((item) => item.status !== 'failed')
+    if (pending.length === 0) return
+    isProcessingQueueRef.current = true
+    try {
+      for (const item of pending) {
+        dispatch({
+          type: 'messages/queue/update',
+          payload: { id: item.id, patch: { status: 'sending', attempts: item.attempts + 1, error: undefined } },
+        })
+        try {
+          const delivered = await messagingService.sendMessage(token, item.conversationId, item.content, item.attachments)
+          const resolved: Message = {
+            ...delivered,
+            clientGeneratedId: item.clientGeneratedId,
+            attachments: delivered.attachments ?? item.attachments.map((attachment) => ({
+              ...attachment,
+              temporary: false,
+            })),
+          }
+          dispatch({
+            type: 'messages/replace',
+            payload: {
+              conversationId: item.conversationId,
+              clientGeneratedId: item.clientGeneratedId,
+              message: resolved,
+            },
+          })
+          dispatch({ type: 'messages/queue/remove', payload: item.id })
+        } catch (error) {
+          if (isOfflineError(error)) {
+            dispatch({ type: 'messages/queue/update', payload: { id: item.id, patch: { status: 'queued' } } })
+            break
+          }
+          dispatch({
+            type: 'messages/queue/update',
+            payload: {
+              id: item.id,
+              patch: { status: 'failed', error: (error as Error).message },
+            },
+          })
+        }
+      }
+    } finally {
+      isProcessingQueueRef.current = false
+    }
+  }, [token])
 
   const refreshProfile = useCallback(async () => {
     if (!token) return
@@ -892,6 +1213,13 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     if (!token) return
+    if (state.pendingMessages.length === 0) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+    void processMessageQueue()
+  }, [token, state.pendingMessages, processMessageQueue])
+
+  useEffect(() => {
+    if (!token) return
     if (typeof window === 'undefined') return
     const handleOnline = () => {
       state.pendingEventRegistrations.forEach((item) => {
@@ -900,12 +1228,13 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       })
       void syncPendingRegistrations()
+      void processMessageQueue()
     }
     window.addEventListener('online', handleOnline)
     return () => {
       window.removeEventListener('online', handleOnline)
     }
-  }, [token, syncPendingRegistrations])
+  }, [token, syncPendingRegistrations, processMessageQueue, state.pendingEventRegistrations])
 
   const loadEventDetails = useCallback(
     async (eventId: string, options?: { force?: boolean }): Promise<EventDetails | undefined> => {
@@ -935,26 +1264,138 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const conversations = await messagingService.listConversations(token)
       dispatch({ type: 'conversations/success', payload: conversations })
     } catch (error) {
+      if (isOfflineError(error)) {
+        dispatch({ type: 'conversations/success', payload: conversationsRef.current })
+        return
+      }
       dispatch({ type: 'conversations/error', error: (error as Error).message })
     }
   }, [token])
 
   const loadMessages = useCallback(
-    async (conversationId: string) => {
+    async (conversationId: string, options?: { force?: boolean }) => {
       if (!token) return
-      const messages = await messagingService.listMessages(token, conversationId)
-      dispatch({ type: 'messages/hydrate', payload: { conversationId, messages } })
+      if (!options?.force) {
+        const cached = state.messages[conversationId]
+        if (cached && cached.length > 0) {
+          return
+        }
+      }
+      try {
+        const messages = await messagingService.listMessages(token, conversationId)
+        dispatch({ type: 'messages/hydrate', payload: { conversationId, messages } })
+      } catch (error) {
+        if (isOfflineError(error)) {
+          const cached = state.messages[conversationId]
+          if (cached) {
+            dispatch({ type: 'messages/hydrate', payload: { conversationId, messages: cached } })
+          }
+          return
+        }
+        throw error
+      }
+    },
+    [token, state.messages],
+  )
+
+  const sendMessage = useCallback(
+    async (conversationId: string, content: string, attachments?: Attachment[]) => {
+      if (!token) return
+      const trimmed = content.trim()
+      if (!trimmed && (!attachments || attachments.length === 0)) {
+        return
+      }
+      const timestamp = new Date().toISOString()
+      const clientGeneratedId =
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `local-${Date.now()}`
+      const sanitizedAttachments = (attachments ?? []).map((attachment) => ({
+        id: attachment.id,
+        name: attachment.name,
+        size: attachment.size,
+        mimeType: attachment.mimeType,
+        url: attachment.url,
+        previewUrl: attachment.previewUrl,
+        temporary: attachment.temporary ?? true,
+      }))
+      const optimistic: Message = {
+        id: clientGeneratedId,
+        conversationId,
+        senderId: user?.id ?? 'self',
+        content: trimmed,
+        createdAt: timestamp,
+        status: 'sent',
+        attachments: sanitizedAttachments,
+        clientGeneratedId,
+      }
+      dispatch({ type: 'messages/append', payload: optimistic })
+      const pending: PendingMessageState = {
+        id: clientGeneratedId,
+        conversationId,
+        clientGeneratedId,
+        content: trimmed,
+        attachments: sanitizedAttachments,
+        createdAt: timestamp,
+        attempts: 0,
+        status: 'queued',
+      }
+      dispatch({ type: 'messages/queue/add', payload: pending })
+      pendingMessagesRef.current = [...pendingMessagesRef.current, pending]
+      realtimeMessagingRef.current?.announcePresence('online', conversationId)
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        return
+      }
+      await processMessageQueue()
+    },
+    [token, user?.id, processMessageQueue],
+  )
+
+  const markConversationRead = useCallback(
+    (conversationId: string) => {
+      dispatch({ type: 'conversations/unread', payload: { conversationId, unreadCount: 0 } })
+      dispatch({ type: 'messages/read', payload: { conversationId } })
+      realtimeMessagingRef.current?.markConversationRead(conversationId)
+      if (!token) return
+      void messagingService.markConversationRead(token, conversationId).catch((error) => {
+        if (!isOfflineError(error)) {
+          console.warn('Unable to mark conversation as read', error)
+        }
+      })
     },
     [token],
   )
 
-  const sendMessage = useCallback(
-    async (conversationId: string, content: string) => {
-      if (!token) return
-      const message = await messagingService.sendMessage(token, conversationId, content)
-      dispatch({ type: 'messages/append', payload: message })
+  const retryMessage = useCallback(
+    (queuedMessageId: string) => {
+      dispatch({ type: 'messages/queue/update', payload: { id: queuedMessageId, patch: { status: 'queued', error: undefined } } })
+      void processMessageQueue()
     },
-    [token],
+    [processMessageQueue],
+  )
+
+  const setTypingState = useCallback((conversationId: string, typing: boolean) => {
+    realtimeMessagingRef.current?.announcePresence(typing ? 'typing' : 'online', conversationId)
+  }, [])
+
+  const notifyIncomingMessage = useCallback(
+    (message: Message) => {
+      if (message.senderId === user?.id) return
+      if (typeof window === 'undefined') return
+      if (!('Notification' in window)) return
+      if (Notification.permission !== 'granted') return
+      const conversation = conversationsRef.current.find((item) => item.id === message.conversationId)
+      const sender = conversation?.participants.find((participant) => participant.id === message.senderId)
+      try {
+        new Notification(sender?.fullName ?? 'Nouveau message', {
+          body: message.content,
+          tag: `conversation-${message.conversationId}`,
+        })
+      } catch (error) {
+        if (import.meta.env.DEV) {
+          console.warn('Unable to display message notification', error)
+        }
+      }
+    },
+    [user?.id],
   )
 
   useEffect(() => {
@@ -967,19 +1408,35 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     if (!token) return
-    const realtime = createRealtimeClient(token)
-    const unsubscribeMessages = realtime.subscribeToMessages((message) => {
-      dispatch({ type: 'messages/append', payload: message })
+    const realtime = createRealtimeMessaging({
+      token,
+      userId: user?.id ?? undefined,
+      onMessage: (message) => {
+        dispatch({ type: 'messages/append', payload: message })
+        notifyIncomingMessage(message)
+      },
+      onMatches: (matches) => {
+        commitMatches(matches, { source: 'realtime', merge: true })
+      },
+      onPresence: (presence) => {
+        dispatch({ type: 'presence/update', payload: presence })
+      },
+      onSession: (snapshot) => {
+        dispatch({ type: 'realtime/session', payload: snapshot })
+      },
     })
-    const unsubscribeMatches = realtime.subscribeToMatches((matches) => {
-      commitMatches(matches, { source: 'realtime', merge: true })
-    })
+    realtimeMessagingRef.current = realtime
+    realtime.start()
     return () => {
-      unsubscribeMessages()
-      unsubscribeMatches()
-      realtime.disconnect()
+      realtime.stop()
+      realtimeMessagingRef.current = null
     }
-  }, [token, commitMatches])
+  }, [token, user?.id, commitMatches, notifyIncomingMessage])
+
+  useEffect(() => {
+    if (!state.activeConversationId) return
+    realtimeMessagingRef.current?.announcePresence('online', state.activeConversationId)
+  }, [state.activeConversationId])
 
   const setActiveConversation = useCallback((conversationId: string | null) => {
     dispatch({ type: 'activeConversation/set', payload: conversationId })
@@ -1003,6 +1460,9 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       refreshConversations,
       loadMessages,
       sendMessage,
+      markConversationRead,
+      retryMessage,
+      setTypingState,
       setActiveConversation,
       acknowledgeMatchNotification,
     }),
@@ -1019,6 +1479,9 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       refreshConversations,
       loadMessages,
       sendMessage,
+      markConversationRead,
+      retryMessage,
+      setTypingState,
       setActiveConversation,
       acknowledgeMatchNotification,
     ],
