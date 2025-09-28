@@ -12,6 +12,7 @@ const ConversationList: React.FC<ConversationListProps> = ({ conversations, acti
   <ul className="list">
     {conversations.map((conversation) => {
       const lastMessage = conversation.lastMessage
+      const lastUpdate = new Date(conversation.updatedAt)
       return (
         <li key={conversation.id}>
           <button
@@ -24,6 +25,9 @@ const ConversationList: React.FC<ConversationListProps> = ({ conversations, acti
               {conversation.unreadCount > 0 && <span className="badge">{conversation.unreadCount}</span>}
             </div>
             {lastMessage && <p className="list__item-subtitle">{lastMessage.content}</p>}
+            <p className="list__item-subtitle" aria-label={`Mis à jour le ${lastUpdate.toLocaleString()}`}>
+              {lastUpdate.toLocaleTimeString()} · {conversation.unreadCount} non lus
+            </p>
           </button>
         </li>
       )

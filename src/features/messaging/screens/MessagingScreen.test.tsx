@@ -32,6 +32,8 @@ const baseStore = {
     conversations: { status: 'success', data: [conversation] },
     messages: { 'conv-1': [] },
     activeConversationId: null,
+    pendingMessages: [],
+    messagingRealtime: { status: 'connected', sessionId: 'session', since: new Date().toISOString(), presence: {} },
   },
   refreshProfile: vi.fn(),
   saveProfile: vi.fn(),
@@ -43,6 +45,9 @@ const baseStore = {
   refreshConversations: vi.fn(),
   loadMessages: vi.fn(),
   sendMessage: vi.fn(),
+  markConversationRead: vi.fn(),
+  retryMessage: vi.fn(),
+  setTypingState: vi.fn(),
   setActiveConversation: vi.fn(),
 }
 

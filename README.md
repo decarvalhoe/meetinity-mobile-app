@@ -11,6 +11,8 @@ The mobile application is built with **React 18**, **TypeScript**, and **Vite**.
 - **User Authentication**: Secure login with OAuth 2.0 (Google and LinkedIn).
 - **Protected Routes**: Access to user-specific content is restricted to authenticated users.
 - **Profile Management**: Users can view their profile information after logging in.
+- **Realtime Messaging**: Conversations, read receipts, and attachments are kept in sync through the realtime transport with automatic reconnection and presence updates.
+- **Offline Resilience**: Conversation and message queues persist in local storage, enabling message retry and duplicate prevention even when the device goes offline.
 - **HTTP Services**: Communication with the backend API is handled by **Axios**.
 
 ## Tech Stack
