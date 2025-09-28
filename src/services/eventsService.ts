@@ -1,5 +1,5 @@
 import http from './http'
-import type { EventDetails, EventSummary } from '../features/events/types'
+import type { EventDetails, EventListFilters, EventListResponse, EventSummary } from '../features/events/types'
 
 const withToken = (token: string) => ({
   headers: {
@@ -8,8 +8,14 @@ const withToken = (token: string) => ({
 })
 
 const eventsService = {
-  async list(token: string): Promise<EventSummary[]> {
-    const response = await http.get<EventSummary[]>('/events', withToken(token))
+  async list(
+    token: string,
+    params: (EventListFilters & { page?: number; pageSize?: number }) | undefined = undefined,
+  ): Promise<EventListResponse> {
+    const response = await http.get<EventListResponse>('/events', {
+      ...withToken(token),
+      params,
+    })
     return response.data
   },
   async details(token: string, eventId: string): Promise<EventDetails> {

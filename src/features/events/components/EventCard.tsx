@@ -5,10 +5,20 @@ import '../../shared.css'
 interface EventCardProps {
   event: EventSummary
   onToggleRegistration?: (eventId: string, attending: boolean) => void
+  onViewDetails?: (eventId: string) => void
+  isProcessing?: boolean
 }
 
-const EventCard: React.FC<EventCardProps> = ({ event, onToggleRegistration }) => {
+const EventCard: React.FC<EventCardProps> = ({ event, onToggleRegistration, onViewDetails, isProcessing }) => {
   const isFull = event.attendingCount >= event.capacity
+  const isRegistered = Boolean(event.isRegistered)
+  const isDisabled = isProcessing || (!isRegistered && isFull)
+  const actionLabel = isRegistered ? 'Se désinscrire' : isFull ? 'Complet' : "S'inscrire"
+  const handleToggle = () => {
+    if (!onToggleRegistration) return
+    if (!isRegistered && isFull) return
+    onToggleRegistration(event.id, !isRegistered)
+  }
   return (
     <article className="card">
       <div className="card__header">
@@ -28,14 +38,14 @@ const EventCard: React.FC<EventCardProps> = ({ event, onToggleRegistration }) =>
         </p>
       </div>
       <div className="card__footer card__footer--actions">
-        <button
-          type="button"
-          className="primary"
-          disabled={isFull}
-          onClick={() => onToggleRegistration?.(event.id, event.attendingCount < event.capacity)}
-        >
-          {isFull ? 'Complet' : "S'inscrire"}
+        <button type="button" className="primary" disabled={isDisabled} onClick={handleToggle}>
+          {isProcessing ? 'Synchronisation…' : actionLabel}
         </button>
+        {onViewDetails && (
+          <button type="button" className="secondary" onClick={() => onViewDetails(event.id)}>
+            Voir les détails
+          </button>
+        )}
       </div>
     </article>
   )

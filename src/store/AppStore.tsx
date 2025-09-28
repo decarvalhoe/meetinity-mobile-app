@@ -10,7 +10,11 @@ import type {
   PendingSwipeAction,
   SwipeDecision,
 } from '../features/discovery/types'
-import type { EventSummary } from '../features/events/types'
+import type {
+  EventDetails,
+  EventListFilters,
+  EventSummary,
+} from '../features/events/types'
 import type { Conversation, Message } from '../features/messaging/types'
 import profileService from '../services/profileService'
 import matchingService from '../services/matchingService'
@@ -28,28 +32,54 @@ interface ResourceState<T> {
   error?: string
 }
 
+interface EventListState {
+  items: EventSummary[]
+  page: number
+  pageSize: number
+  total: number
+  hasMore: boolean
+  filters: EventListFilters
+}
+
+interface PendingEventRegistration {
+  id: string
+  eventId: string
+  register: boolean
+  timestamp: string
+  error?: string
+  previousSummary?: EventSummary
+  previousDetail?: EventDetails
+}
+
 interface AppState {
   profile: ResourceState<UserProfile | null>
   matches: ResourceState<MatchFeedItem[]>
-  events: ResourceState<EventSummary[]>
+  events: ResourceState<EventListState>
   conversations: ResourceState<Conversation[]>
   messages: Record<string, Message[]>
   activeConversationId: string | null
   matchFeedMeta: MatchFeedMeta | null
   pendingMatchActions: PendingSwipeAction[]
   matchNotifications: MatchFeedItem[]
+  eventDetails: Record<string, EventDetails | undefined>
+  pendingEventRegistrations: PendingEventRegistration[]
 }
 
 const createInitialState = (): AppState => ({
   profile: { status: 'idle', data: null },
   matches: { status: 'idle', data: [] },
-  events: { status: 'idle', data: [] },
+  events: {
+    status: 'idle',
+    data: { items: [], page: 1, pageSize: 20, total: 0, hasMore: false, filters: {} },
+  },
   conversations: { status: 'idle', data: [] },
   messages: {},
   activeConversationId: null,
   matchFeedMeta: null,
   pendingMatchActions: [],
   matchNotifications: [],
+  eventDetails: {},
+  pendingEventRegistrations: [],
 })
 
 type AppAction =
@@ -65,9 +95,15 @@ type AppAction =
   | { type: 'matches/pending/update'; payload: PendingSwipeAction }
   | { type: 'matches/notify'; payload: MatchFeedItem[] }
   | { type: 'matches/notification/ack'; payload: string }
-  | { type: 'events/loading' }
-  | { type: 'events/success'; payload: EventSummary[] }
+  | { type: 'events/loading'; payload?: { append?: boolean } }
+  | { type: 'events/success'; payload: EventListState }
   | { type: 'events/error'; error: string }
+  | { type: 'events/update'; payload: { summary?: EventSummary; detail?: EventDetails } }
+  | { type: 'events/rollback'; payload: { summary?: EventSummary; detail?: EventDetails; eventId: string } }
+  | { type: 'events/detail/cache'; payload: EventDetails }
+  | { type: 'events/pending/add'; payload: PendingEventRegistration }
+  | { type: 'events/pending/remove'; payload: string }
+  | { type: 'events/pending/error'; payload: { id: string; error: string } }
   | { type: 'conversations/loading' }
   | { type: 'conversations/success'; payload: Conversation[] }
   | { type: 'conversations/error'; error: string }
@@ -129,11 +165,111 @@ const reducer = (state: AppState, action: AppAction): AppState => {
         matchNotifications: state.matchNotifications.filter((match) => match.id !== action.payload),
       }
     case 'events/loading':
-      return { ...state, events: { ...state.events, status: 'loading', error: undefined } }
+      return {
+        ...state,
+        events: {
+          ...state.events,
+          status: 'loading',
+          error: undefined,
+        },
+      }
     case 'events/success':
-      return { ...state, events: { status: 'success', data: action.payload } }
+      return {
+        ...state,
+        events: {
+          status: 'success',
+          data: action.payload,
+        },
+      }
     case 'events/error':
-      return { ...state, events: { ...state.events, status: 'error', error: action.error } }
+      return {
+        ...state,
+        events: {
+          ...state.events,
+          status: 'error',
+          error: action.error,
+        },
+      }
+    case 'events/update': {
+      const summary = action.payload.summary
+      const detail = action.payload.detail
+      const items = summary
+        ? state.events.data.items.map((event) => (event.id === summary.id ? { ...event, ...summary } : event))
+        : state.events.data.items
+      return {
+        ...state,
+        events: {
+          ...state.events,
+          data: {
+            ...state.events.data,
+            items,
+          },
+        },
+        eventDetails:
+          detail !== undefined
+            ? {
+                ...state.eventDetails,
+                [detail.id]: {
+                  ...state.eventDetails[detail.id],
+                  ...detail,
+                },
+              }
+            : state.eventDetails,
+      }
+    }
+    case 'events/rollback': {
+      const { summary, detail, eventId } = action.payload
+      const items = summary
+        ? state.events.data.items.map((event) => (event.id === summary.id ? summary : event))
+        : state.events.data.items
+      const nextDetails = { ...state.eventDetails }
+      if (detail) {
+        nextDetails[eventId] = detail
+      }
+      return {
+        ...state,
+        events: {
+          ...state.events,
+          data: {
+            ...state.events.data,
+            items,
+          },
+        },
+        eventDetails: nextDetails,
+      }
+    }
+    case 'events/detail/cache':
+      return {
+        ...state,
+        eventDetails: {
+          ...state.eventDetails,
+          [action.payload.id]: action.payload,
+        },
+      }
+    case 'events/pending/add': {
+      const existingIndex = state.pendingEventRegistrations.findIndex((item) => item.id === action.payload.id)
+      if (existingIndex !== -1) {
+        const items = [...state.pendingEventRegistrations]
+        items[existingIndex] = { ...items[existingIndex], ...action.payload }
+        return { ...state, pendingEventRegistrations: items }
+      }
+      return {
+        ...state,
+        pendingEventRegistrations: [...state.pendingEventRegistrations, action.payload],
+      }
+    }
+    case 'events/pending/remove':
+      return {
+        ...state,
+        pendingEventRegistrations: state.pendingEventRegistrations.filter((item) => item.id !== action.payload),
+      }
+    case 'events/pending/error':
+      return {
+        ...state,
+        pendingEventRegistrations: state.pendingEventRegistrations.map((item) =>
+          item.id === action.payload.id ? { ...item, error: action.payload.error } : item,
+        ),
+      }
     case 'conversations/loading':
       return { ...state, conversations: { ...state.conversations, status: 'loading', error: undefined } }
     case 'conversations/success':
@@ -172,8 +308,9 @@ interface AppStoreValue {
   refreshMatches: () => Promise<void>
   acceptMatch: (matchId: string) => Promise<void>
   declineMatch: (matchId: string) => Promise<void>
-  refreshEvents: () => Promise<void>
+  refreshEvents: (filters?: EventListFilters, page?: number) => Promise<void>
   toggleEventRegistration: (eventId: string, register: boolean) => Promise<void>
+  loadEventDetails: (eventId: string, options?: { force?: boolean }) => Promise<EventDetails | undefined>
   refreshConversations: () => Promise<void>
   loadMessages: (conversationId: string) => Promise<void>
   sendMessage: (conversationId: string, content: string) => Promise<void>
@@ -190,11 +327,45 @@ const hydrateState = (): AppState => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return createInitialState()
-    const parsed = JSON.parse(raw) as AppState
-    return {
-      ...createInitialState(),
+    const parsed = JSON.parse(raw) as Partial<AppState>
+    const base = createInitialState()
+    const merged: AppState = {
+      ...base,
       ...parsed,
+      profile: parsed.profile ?? base.profile,
+      matches: parsed.matches ?? base.matches,
+      conversations: parsed.conversations ?? base.conversations,
+      messages: parsed.messages ?? base.messages,
+      activeConversationId: parsed.activeConversationId ?? base.activeConversationId,
+      matchFeedMeta: parsed.matchFeedMeta ?? base.matchFeedMeta,
+      pendingMatchActions: parsed.pendingMatchActions ?? base.pendingMatchActions,
+      matchNotifications: parsed.matchNotifications ?? base.matchNotifications,
+      eventDetails: parsed.eventDetails ?? base.eventDetails,
+      pendingEventRegistrations: parsed.pendingEventRegistrations ?? base.pendingEventRegistrations,
     }
+    const maybeEvents = parsed.events
+    if (maybeEvents && !Array.isArray((maybeEvents as unknown as { data: unknown }).data)) {
+      const data = (maybeEvents.data ?? base.events.data) as Partial<EventListState>
+      merged.events = {
+        status: maybeEvents.status ?? base.events.status,
+        data: {
+          ...base.events.data,
+          ...data,
+          filters: data.filters ?? base.events.data.filters,
+          items: Array.isArray(data.items) ? data.items : base.events.data.items,
+        },
+      }
+    } else {
+      const items = Array.isArray(maybeEvents?.data) ? (maybeEvents?.data as EventSummary[]) : base.events.data.items
+      merged.events = {
+        status: maybeEvents?.status ?? base.events.status,
+        data: {
+          ...base.events.data,
+          items,
+        },
+      }
+    }
+    return merged
   } catch (error) {
     console.warn('Unable to restore application state', error)
     return createInitialState()
@@ -353,9 +524,15 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const matchesRef = useRef<MatchFeedItem[]>(state.matches.data)
 
+  const eventsStateRef = useRef<EventListState>(state.events.data)
+
   useEffect(() => {
     matchesRef.current = state.matches.data
   }, [state.matches.data])
+
+  useEffect(() => {
+    eventsStateRef.current = state.events.data
+  }, [state.events.data])
 
   const commitMatches = useCallback(
     (
@@ -547,28 +724,208 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [token, syncPendingLikes])
 
-  const refreshEvents = useCallback(async () => {
-    if (!token) return
-    dispatch({ type: 'events/loading' })
-    try {
-      const events = await eventsService.list(token)
-      dispatch({ type: 'events/success', payload: events })
-    } catch (error) {
-      dispatch({ type: 'events/error', error: (error as Error).message })
-    }
-  }, [token])
+  const refreshEvents = useCallback(
+    async (filters: EventListFilters = {}, page = 1) => {
+      if (!token) return
+      dispatch({ type: 'events/loading', payload: { append: page > 1 } })
+      const sanitizedFilters = Object.fromEntries(
+        Object.entries(filters).filter(([, value]) => value !== undefined && value !== ''),
+      ) as EventListFilters
+      try {
+        const response = await eventsService.list(token, { ...sanitizedFilters, page })
+        const shouldAppend = page > 1
+        const baseState = eventsStateRef.current
+        const mergedItems = shouldAppend
+          ? (() => {
+              const byId = new Map<string, EventSummary>()
+              baseState.items.forEach((item) => {
+                byId.set(item.id, item)
+              })
+              response.items.forEach((item) => {
+                byId.set(item.id, item)
+              })
+              return Array.from(byId.values())
+            })()
+          : response.items
+        const nextState: EventListState = {
+          items: mergedItems,
+          page: response.page,
+          pageSize: response.pageSize,
+          total: response.total,
+          hasMore: response.hasMore,
+          filters: response.filters ?? { ...sanitizedFilters },
+        }
+        dispatch({ type: 'events/success', payload: nextState })
+      } catch (error) {
+        dispatch({ type: 'events/error', error: (error as Error).message })
+      }
+    },
+    [token],
+  )
 
   const toggleEventRegistration = useCallback(
     async (eventId: string, register: boolean) => {
       if (!token) return
-      if (register) {
-        await eventsService.join(token, eventId)
-      } else {
-        await eventsService.leave(token, eventId)
+      const timestamp = new Date().toISOString()
+      const actionId = `${eventId}-${timestamp}`
+      const previousSummary = eventsStateRef.current.items.find((event) => event.id === eventId)
+      const previousDetail = state.eventDetails[eventId]
+      const delta = register ? 1 : -1
+      const nextSummary = previousSummary
+        ? {
+            ...previousSummary,
+            attendingCount: Math.max(
+              0,
+              Math.min(previousSummary.capacity, previousSummary.attendingCount + delta),
+            ),
+            isRegistered: register,
+          }
+        : undefined
+      const currentUserId = state.profile.data?.id ?? 'me'
+      const currentUserName = state.profile.data?.fullName ?? 'Vous'
+      const currentUserAvatar = state.profile.data?.avatarUrl
+      const nextDetail = previousDetail
+        ? {
+            ...previousDetail,
+            attendingCount: Math.max(
+              0,
+              Math.min(previousDetail.capacity, previousDetail.attendingCount + delta),
+            ),
+            isRegistered: register,
+            participants: register
+              ? previousDetail.participants.some((participant) => participant.id === currentUserId)
+                ? previousDetail.participants
+                : [
+                    ...previousDetail.participants,
+                    { id: currentUserId, name: currentUserName, avatarUrl: currentUserAvatar },
+                  ]
+              : previousDetail.participants.filter((participant) => participant.id !== currentUserId),
+          }
+        : undefined
+      if (nextSummary || nextDetail) {
+        dispatch({ type: 'events/update', payload: { summary: nextSummary, detail: nextDetail } })
       }
-      await refreshEvents()
+      dispatch({
+        type: 'events/pending/add',
+        payload: {
+          id: actionId,
+          eventId,
+          register,
+          timestamp,
+          previousSummary,
+          previousDetail,
+        },
+      })
+      try {
+        if (register) {
+          await eventsService.join(token, eventId)
+        } else {
+          await eventsService.leave(token, eventId)
+        }
+        dispatch({ type: 'events/pending/remove', payload: actionId })
+      } catch (error) {
+        if (isOfflineError(error)) {
+          dispatch({
+            type: 'events/pending/error',
+            payload: { id: actionId, error: (error as Error).message ?? 'offline' },
+          })
+          return
+        }
+        dispatch({ type: 'events/pending/remove', payload: actionId })
+        if (previousSummary || previousDetail) {
+          dispatch({
+            type: 'events/rollback',
+            payload: { summary: previousSummary, detail: previousDetail, eventId },
+          })
+        }
+        throw error
+      }
     },
-    [token, refreshEvents],
+    [token, state.eventDetails, state.profile.data],
+  )
+
+  const syncPendingRegistrations = useCallback(async () => {
+    if (!token) return
+    if (state.pendingEventRegistrations.length === 0) return
+    for (const action of state.pendingEventRegistrations) {
+      if (action.error) {
+        continue
+      }
+      try {
+        if (action.register) {
+          await eventsService.join(token, action.eventId)
+        } else {
+          await eventsService.leave(token, action.eventId)
+        }
+        dispatch({ type: 'events/pending/remove', payload: action.id })
+      } catch (error) {
+        if (isOfflineError(error)) {
+          dispatch({
+            type: 'events/pending/error',
+            payload: { id: action.id, error: (error as Error).message ?? 'offline' },
+          })
+        } else {
+          dispatch({ type: 'events/pending/remove', payload: action.id })
+          if (action.previousSummary || action.previousDetail) {
+            dispatch({
+              type: 'events/rollback',
+              payload: {
+                summary: action.previousSummary,
+                detail: action.previousDetail,
+                eventId: action.eventId,
+              },
+            })
+          }
+        }
+      }
+    }
+  }, [token, state.pendingEventRegistrations])
+
+  useEffect(() => {
+    if (!token) return
+    if (state.pendingEventRegistrations.length === 0) return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+    const hasPendingWithoutError = state.pendingEventRegistrations.some((item) => !item.error)
+    if (!hasPendingWithoutError) return
+    void syncPendingRegistrations()
+  }, [token, state.pendingEventRegistrations, syncPendingRegistrations])
+
+  useEffect(() => {
+    if (!token) return
+    if (typeof window === 'undefined') return
+    const handleOnline = () => {
+      state.pendingEventRegistrations.forEach((item) => {
+        if (item.error) {
+          dispatch({ type: 'events/pending/add', payload: { ...item, error: undefined } })
+        }
+      })
+      void syncPendingRegistrations()
+    }
+    window.addEventListener('online', handleOnline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+    }
+  }, [token, syncPendingRegistrations])
+
+  const loadEventDetails = useCallback(
+    async (eventId: string, options?: { force?: boolean }): Promise<EventDetails | undefined> => {
+      if (!token) return state.eventDetails[eventId]
+      const cached = state.eventDetails[eventId]
+      if (cached && !options?.force) {
+        return cached
+      }
+      try {
+        const details = await eventsService.details(token, eventId)
+        dispatch({ type: 'events/detail/cache', payload: details })
+        return details
+      } catch (error) {
+        if (cached && isOfflineError(error)) {
+          return cached
+        }
+        throw error
+      }
+    },
+    [token, state.eventDetails],
   )
 
   const refreshConversations = useCallback(async () => {
@@ -642,6 +999,7 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       declineMatch,
       refreshEvents,
       toggleEventRegistration,
+      loadEventDetails,
       refreshConversations,
       loadMessages,
       sendMessage,
@@ -657,6 +1015,7 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       declineMatch,
       refreshEvents,
       toggleEventRegistration,
+      loadEventDetails,
       refreshConversations,
       loadMessages,
       sendMessage,

@@ -7,6 +7,9 @@ import TabLayout from './TabLayout'
 import ProfileScreen from '../features/profile/screens/ProfileScreen'
 import DiscoveryScreen from '../features/discovery/screens/DiscoveryScreen'
 import EventsScreen from '../features/events/screens/EventsScreen'
+import EventListScreen from '../features/events/screens/EventListScreen'
+import EventDetailScreen from '../features/events/screens/EventDetailScreen'
+import MyEventsScreen from '../features/events/screens/MyEventsScreen'
 import MessagingScreen from '../features/messaging/screens/MessagingScreen'
 
 const AppRouter: React.FC = () => (
@@ -25,7 +28,11 @@ const AppRouter: React.FC = () => (
         <Route index element={<Navigate to="profile" replace />} />
         <Route path="profile" element={<ProfileScreen />} />
         <Route path="discovery" element={<DiscoveryScreen />} />
-        <Route path="events" element={<EventsScreen />} />
+        <Route path="events" element={<EventsScreen />}>
+          <Route index element={<EventListScreen />} />
+          <Route path="mine" element={<MyEventsScreen />} />
+          <Route path=":eventId" element={<EventDetailScreen />} />
+        </Route>
         <Route path="messaging" element={<MessagingScreen />} />
       </Route>
       <Route path="/" element={<Navigate to="/app/profile" replace />} />
