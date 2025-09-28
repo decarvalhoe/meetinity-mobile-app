@@ -1,0 +1,245 @@
+.card {
+  background: var(--surface, #ffffff);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+  margin-bottom: 16px;
+}
+
+.card__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.card__avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 24px;
+  object-fit: cover;
+}
+
+.card__avatar--placeholder {
+  background: var(--primary, #6c5ce7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+}
+
+.card__subtitle {
+  color: var(--muted, #6b7280);
+  margin: 0;
+}
+
+.card__body {
+  display: grid;
+  gap: 8px;
+  color: var(--text, #111827);
+}
+
+.card__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card__footer--actions {
+  justify-content: flex-end;
+}
+
+.card__action {
+  border: none;
+  background: transparent;
+  color: var(--primary, #6c5ce7);
+  cursor: pointer;
+}
+
+.pill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+}
+
+.pill-list li {
+  background: var(--chip, #ede9fe);
+  color: var(--primary, #6c5ce7);
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.tag {
+  background: var(--chip, #ede9fe);
+  color: var(--primary, #6c5ce7);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.list__item {
+  width: 100%;
+  text-align: left;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--border, #e5e7eb);
+  cursor: pointer;
+}
+
+.list__item--active {
+  border-color: var(--primary, #6c5ce7);
+  box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.1);
+}
+
+.list__item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.list__item-subtitle {
+  margin: 0;
+  color: var(--muted, #6b7280);
+}
+
+.badge {
+  background: var(--primary, #6c5ce7);
+  color: #fff;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.composer {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  background: var(--surface, #ffffff);
+  border-radius: 16px;
+  border: 1px solid var(--border, #e5e7eb);
+}
+
+.composer textarea {
+  border-radius: 12px;
+  border: 1px solid var(--border, #e5e7eb);
+  padding: 8px;
+  resize: none;
+}
+
+.form-group {
+  display: grid;
+  gap: 4px;
+}
+
+.form-group input,
+.form-group textarea {
+  border-radius: 12px;
+  border: 1px solid var(--border, #e5e7eb);
+  padding: 8px;
+}
+
+.form-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.primary {
+  background: var(--primary, #6c5ce7);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.secondary {
+  background: transparent;
+  color: var(--primary, #6c5ce7);
+  border: 1px solid var(--primary, #6c5ce7);
+  padding: 8px 16px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.error-text {
+  color: #ef4444;
+  margin: 0;
+}
+
+.loading,
+.error-state {
+  text-align: center;
+  padding: 24px;
+  color: var(--muted, #6b7280);
+}
+
+.message {
+  background: var(--surface, #ffffff);
+  border-radius: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border, #e5e7eb);
+}
+
+.message--outgoing {
+  background: rgba(108, 92, 231, 0.1);
+  border-color: rgba(108, 92, 231, 0.4);
+}
+
+.message__content {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.message__content p {
+  margin: 0;
+  flex: 1;
+}
+
+.message__meta {
+  color: var(--muted, #6b7280);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+section h1 {
+  margin-top: 0;
+}
+
+.messaging-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 2fr;
+  gap: 16px;
+}
+
+.conversation-panel {
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 12px;
+}

@@ -10,7 +10,11 @@ L'application mobile est développée avec **React 18**, **TypeScript** et **Vit
 
 - **Authentification utilisateur**: Connexion sécurisée avec OAuth 2.0 (Google et LinkedIn).
 - **Routes protégées**: L'accès au contenu spécifique à l'utilisateur est réservé aux utilisateurs authentifiés.
-- **Gestion de profil**: Les utilisateurs peuvent consulter les informations de leur profil après s'être connectés.
+- **Hub multi-onglets**: Une navigation par onglets (profil, découverte, événements, messagerie) propose un accès rapide aux parcours clés.
+- **Gestion de profil enrichie**: Consultation, édition et synchronisation des préférences directement depuis l'onglet Profil.
+- **Découverte & matching**: Suggestions contextualisées avec actions d'acceptation/refus, mises à jour en temps réel.
+- **Événements**: Listing, suivi du remplissage et inscription/désinscription instantanés.
+- **Messagerie temps réel**: Gestion des conversations, historique hors-ligne et envoi de messages synchronisés.
 - **Services HTTP**: La communication avec l'API backend est gérée par **Axios**.
 
 ## Stack Technique
@@ -21,10 +25,19 @@ L'application mobile est développée avec **React 18**, **TypeScript** et **Vit
 - **React Router**: Pour la gestion de la navigation au sein de l'application.
 - **Vitest**: Pour l'exécution des tests unitaires.
 
-## État du Projet
+## Parcours utilisateur
 
-- **Avancement**: 70%
-- **Détails**: L'application dispose d'une structure complète avec un système d'authentification fonctionnel. Le principal objectif pour le développement futur sera d'implémenter les fonctionnalités de base de la plateforme, telles que la découverte d'événements et la mise en relation d'utilisateurs.
+1. **Profil** – l'utilisateur retrouve sa carte de profil, accède à l'éditeur (biographie, disponibilités, intérêts) et suit l'état de synchronisation.
+2. **Découverte** – une série de cartes profil affiche le score de compatibilité et les intérêts communs; chaque action (passer/contacter) met à jour la liste en temps réel.
+3. **Événements** – les événements à venir sont triés chronologiquement avec capacité et statut; un bouton unique permet de gérer l'inscription.
+4. **Messagerie** – les conversations récentes apparaissent dans une liste avec indicateurs de non-lus; le panneau de discussion affiche l'historique, un compositeur asynchrone et la mise à jour instantanée des nouveaux messages.
+
+## Exigences de performance
+
+- **Temps de chargement**: Préchargement des données au montage de l'application et persistance locale pour un démarrage en < 1,5s sur réseau 4G.
+- **Réactivité**: Actions critiques (envoi de message, inscription événement) doivent fournir un retour visuel en < 100 ms et confirmer la synchronisation en < 1s.
+- **Résilience hors-ligne**: Les données mises en cache sont conservées pour consultation et réenvoi dès la reconnexion.
+- **Temps réel**: La réception de nouveaux messages ou matchs doit apparaître dans l'UI en < 2s après émission côté serveur grâce au client SSE/WebSocket.
 
 ## Installation
 

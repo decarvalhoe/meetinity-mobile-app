@@ -1,0 +1,55 @@
+.app-shell {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100vh;
+  background: var(--background, #f8fafc);
+}
+
+.app-shell__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: var(--surface, #ffffff);
+  border-bottom: 1px solid var(--border, #e5e7eb);
+}
+
+.app-shell__content {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.app-shell__tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid var(--border, #e5e7eb);
+  background: var(--surface, #ffffff);
+}
+
+.app-shell__tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 0;
+  text-decoration: none;
+  color: var(--muted, #6b7280);
+  font-weight: 500;
+  gap: 4px;
+}
+
+.app-shell__tab--active {
+  color: var(--primary, #6c5ce7);
+  border-top: 2px solid var(--primary, #6c5ce7);
+  margin-top: -2px;
+}
+
+@media (max-width: 768px) {
+  .app-shell__content {
+    padding: 16px;
+  }
+
+  .messaging-grid {
+    grid-template-columns: 1fr;
+  }
+}

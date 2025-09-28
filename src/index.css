@@ -1,51 +1,34 @@
+:root {
+  --primary: #6c5ce7;
+  --surface: #ffffff;
+  --background: #f8fafc;
+  --text: #111827;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --chip: #ede9fe;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--background);
+  color: var(--text);
 }
 
-.App {
-  text-align: center;
-  padding: 20px;
+button {
+  font-family: inherit;
 }
 
-.App-header {
-  background-color: #282c34;
-  padding: 20px;
-  color: white;
-  border-radius: 10px;
+a {
+  color: inherit;
 }
 
-.features {
-  margin-top: 20px;
-}
-
-.features ul {
-  list-style-type: none;
-  padding: 0;
-}
-
-.features li {
-  background-color: #61dafb;
-  color: #282c34;
-  margin: 10px 0;
-  padding: 10px;
-  border-radius: 5px;
-}
-.auth-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 2rem 1rem;
-}
-
-.auth-container button {
-  width: 100%;
-  max-width: 300px;
-  padding: 0.75rem;
-  margin: 0.5rem 0;
-  font-size: 1rem;
+main {
+  max-width: 960px;
+  margin: 0 auto;
 }
