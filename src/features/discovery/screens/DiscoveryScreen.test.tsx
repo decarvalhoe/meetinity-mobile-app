@@ -17,6 +17,9 @@ const baseStore = {
     conversations: { status: 'idle', data: [] },
     messages: {},
     activeConversationId: null,
+    matchFeedMeta: null,
+    pendingMatchActions: [],
+    matchNotifications: [],
   },
   refreshProfile: vi.fn(),
   saveProfile: vi.fn(),
@@ -29,6 +32,7 @@ const baseStore = {
   loadMessages: vi.fn(),
   sendMessage: vi.fn(),
   setActiveConversation: vi.fn(),
+  acknowledgeMatchNotification: vi.fn(),
 }
 
 describe('DiscoveryScreen', () => {
@@ -49,30 +53,32 @@ describe('DiscoveryScreen', () => {
     expect(refreshMatches).toHaveBeenCalled()
   })
 
-  it('allows accepting a match', () => {
-    const acceptMatch = vi.fn()
-    const suggestion = {
-      id: 'match-1',
-      compatibilityScore: 0.8,
-      profile: {
-        id: 'user-2',
-        fullName: 'John Smith',
-        headline: 'Designer',
-        interests: ['UX'],
-      },
-      sharedInterests: ['UX'],
-    }
-
+  it('renders the match dialog when notifications are available', () => {
     mockUseAppStore.mockReturnValue({
       ...baseStore,
-      state: { ...baseStore.state, matches: { status: 'success', data: [suggestion] } },
-      acceptMatch,
+      state: {
+        ...baseStore.state,
+        matchNotifications: [
+          {
+            id: 'match-1',
+            compatibilityScore: 0.92,
+            status: 'matched',
+            sharedInterests: ['Tech'],
+            profile: {
+              id: 'user-2',
+              fullName: 'Alex Martin',
+              headline: 'Product Designer',
+              interests: ['Tech'],
+            },
+            metadata: {},
+          },
+        ],
+      },
     })
 
     render(<DiscoveryScreen />)
 
-    fireEvent.click(screen.getByText('Entrer en contact'))
-
-    expect(acceptMatch).toHaveBeenCalledWith('match-1')
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText(/Alex Martin/)).toBeInTheDocument()
   })
 })
