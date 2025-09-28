@@ -1,41 +1,115 @@
 import { render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter, Routes, Route } from 'react-router-dom'
-import { vi } from 'vitest'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { describe, expect, it, beforeEach, vi } from 'vitest'
 import OAuthCallback from './OAuthCallback'
 import { AuthContext } from '../auth/AuthContext'
 import AuthService from '../services/AuthService'
 
-vi.mock('../services/AuthService')
+vi.mock('../services/AuthService', () => ({
+  default: {
+    handleCallback: vi.fn(),
+  },
+}))
 
-const mockedHandle = AuthService.handleCallback as unknown as vi.Mock
-mockedHandle.mockResolvedValue('token123')
+type AuthServiceMock = {
+  handleCallback: ReturnType<typeof vi.fn>
+}
 
-test('handles callback and redirects to profile after token persistence', async () => {
-  let resolveToken: (() => void) | undefined
-  const setToken = vi
-    .fn()
-    .mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveToken = resolve
-        }),
+const mockedAuthService = AuthService as unknown as AuthServiceMock
+
+const baseContext = {
+  user: null,
+  token: null,
+  isAuthenticated: false,
+  isLoading: false,
+  login: vi.fn(),
+  setToken: vi.fn(),
+  logout: vi.fn(),
+}
+
+describe('OAuthCallback screen', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('completes the OAuth callback and redirects to the profile page', async () => {
+    mockedAuthService.handleCallback.mockResolvedValue('token123')
+    const setToken = vi.fn().mockResolvedValue(undefined)
+
+    render(
+      <AuthContext.Provider value={{ ...baseContext, setToken }}>
+        <MemoryRouter initialEntries={['/auth/callback?provider=google&code=abc&state=def']}>
+          <Routes>
+            <Route path="/auth/callback" element={<OAuthCallback />} />
+            <Route path="/profile" element={<div>Profile</div>} />
+            <Route path="/login" element={<div>Login</div>} />
+          </Routes>
+        </MemoryRouter>
+      </AuthContext.Provider>
     )
-  render(
-    <AuthContext.Provider value={{ token: null, user: null, login: vi.fn(), setToken, logout: vi.fn() }}>
-      <MemoryRouter initialEntries={['/auth/callback?code=abc&state=def']}>
-        <Routes>
-          <Route path="/auth/callback" element={<OAuthCallback />} />
-          <Route path="/profile" element={<div>Profile</div>} />
-          <Route path="/login" element={<div>Login</div>} />
-        </Routes>
-      </MemoryRouter>
-    </AuthContext.Provider>
-  )
 
-  await waitFor(() => expect(setToken).toHaveBeenCalledWith('token123'))
-  expect(screen.queryByText('Profile')).not.toBeInTheDocument()
+    expect(screen.getByText(/Connexion en cours/i)).toBeInTheDocument()
 
-  resolveToken?.()
+    await waitFor(() => expect(setToken).toHaveBeenCalledWith('token123'))
+    await waitFor(() => expect(screen.getByText('Profile')).toBeInTheDocument())
+  })
 
-  await waitFor(() => expect(screen.getByText('Profile')).toBeInTheDocument())
+  it('uses the token provided in the query string when available', async () => {
+    mockedAuthService.handleCallback.mockImplementation((provider, code, state, tokenInQuery) =>
+      Promise.resolve(tokenInQuery ?? 'server-token')
+    )
+    const setToken = vi.fn().mockResolvedValue(undefined)
+
+    render(
+      <AuthContext.Provider value={{ ...baseContext, setToken }}>
+        <MemoryRouter initialEntries={['/auth/callback?provider=linkedin&token=direct-token']}>
+          <Routes>
+            <Route path="/auth/callback" element={<OAuthCallback />} />
+            <Route path="/profile" element={<div>Profile</div>} />
+            <Route path="/login" element={<div>Login</div>} />
+          </Routes>
+        </MemoryRouter>
+      </AuthContext.Provider>
+    )
+
+    await waitFor(() => expect(mockedAuthService.handleCallback).toHaveBeenCalledWith('linkedin', null, null, 'direct-token'))
+    await waitFor(() => expect(setToken).toHaveBeenCalledWith('direct-token'))
+  })
+
+  it('displays an error when required parameters are missing', async () => {
+    render(
+      <AuthContext.Provider value={baseContext}>
+        <MemoryRouter initialEntries={['/auth/callback?code=abc&state=def']}>
+          <Routes>
+            <Route path="/auth/callback" element={<OAuthCallback />} />
+            <Route path="/login" element={<div>Login</div>} />
+          </Routes>
+        </MemoryRouter>
+      </AuthContext.Provider>
+    )
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Fournisseur manquant')
+    expect(screen.getByRole('button', { name: /retour à la connexion/i })).toBeInTheDocument()
+    expect(mockedAuthService.handleCallback).not.toHaveBeenCalled()
+  })
+
+  it('notifies the user when the backend rejects the callback', async () => {
+    mockedAuthService.handleCallback.mockRejectedValue(new Error('invalid code'))
+    const setToken = vi.fn().mockRejectedValue(new Error('set-token-failure'))
+
+    render(
+      <AuthContext.Provider value={{ ...baseContext, setToken }}>
+        <MemoryRouter initialEntries={['/auth/callback?provider=google&code=abc&state=def']}>
+          <Routes>
+            <Route path="/auth/callback" element={<OAuthCallback />} />
+            <Route path="/login" element={<div>Login</div>} />
+          </Routes>
+        </MemoryRouter>
+      </AuthContext.Provider>
+    )
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Impossible de finaliser l\'authentification')
+  })
 })

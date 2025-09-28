@@ -6,19 +6,33 @@ export interface User {
   email: string
 }
 
+type Provider = 'google' | 'linkedin'
+
 const AuthService = {
-  async getAuthUrl(provider: 'google' | 'linkedin') {
+  async getAuthUrl(provider: Provider) {
     const { data } = await http.post(`/api/auth/${provider}`)
     return data.auth_url as string
   },
 
-  async handleCallback(params: { code: string; state: string }) {
-    const { data } = await http.post('/api/auth/callback', params)
+  async handleCallback(provider: Provider, code?: string | null, state?: string | null, tokenInQuery?: string | null) {
+    if (tokenInQuery) {
+      return tokenInQuery
+    }
+
+    if (!code || !state) {
+      throw new Error('Missing code or state for OAuth callback.')
+    }
+
+    const { data } = await http.post(`/api/auth/${provider}/callback`, { code, state })
     return data.token as string
   },
 
-  async verify() {
-    const { data } = await http.get('/api/auth/verify')
+  async verify(token: string) {
+    const { data } = await http.get('/api/auth/verify', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
     return data.valid as boolean
   },
 
