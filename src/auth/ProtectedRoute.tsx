@@ -7,10 +7,20 @@ interface Props {
 }
 
 const ProtectedRoute: React.FC<Props> = ({ children }) => {
-  const { token } = useAuth()
-  if (!token) {
+  const { isAuthenticated, isLoading } = useAuth()
+
+  if (isLoading) {
+    return (
+      <div className="auth-status" aria-busy="true">
+        <p>Chargement de votre session…</p>
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
     return <Navigate to="/login" replace />
   }
+
   return children
 }
 
