@@ -5,6 +5,8 @@ import type {
   ProfileDraft,
   ProfilePreferences,
   ProfileUpdatePayload,
+  ProfileExperience,
+  ProfileLink,
   UserProfile,
 } from '../types'
 import photoUpload, { type PhotoUploadState } from '../services/photoUpload'
@@ -14,6 +16,10 @@ const PROFILE_DRAFT_CACHE_KEY = 'profile:draft'
 type ProfileFieldKey = Exclude<keyof ProfileUpdatePayload, 'preferences' | 'avatarUpload' | 'avatarUrl'>
 
 const cloneArray = <T,>(value: T[] | undefined): T[] => (value ? [...value] : [])
+const cloneExperienceArray = (value: ProfileExperience[] | undefined): ProfileExperience[] =>
+  value ? value.map((experience) => ({ ...experience })) : []
+const cloneLinkArray = (value: ProfileLink[] | undefined): ProfileLink[] =>
+  value ? value.map((link) => ({ ...link })) : []
 
 const createDraftFromProfile = (
   profile: UserProfile | null,
@@ -26,6 +32,11 @@ const createDraftFromProfile = (
     interests: cloneArray(profile?.interests ?? preferences?.interests ?? []),
     location: profile?.location ?? '',
     availability: profile?.availability ?? '',
+    company: profile?.company ?? '',
+    position: profile?.position ?? '',
+    skills: cloneArray(profile?.skills ?? []),
+    experiences: cloneExperienceArray(profile?.experiences ?? []),
+    links: cloneLinkArray(profile?.links ?? []),
     avatarUrl: profile?.avatarUrl,
   },
   preferences: {

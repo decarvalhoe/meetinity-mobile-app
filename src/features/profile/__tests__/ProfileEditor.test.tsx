@@ -12,6 +12,9 @@ const profile: UserProfile = {
   interests: ['Tech'],
   location: 'Paris',
   availability: 'Soirées',
+  company: 'Meetinity',
+  position: 'Product Manager',
+  skills: ['Product'],
 }
 
 const preferences: ProfilePreferences = {
@@ -38,7 +41,7 @@ const avatarState: PhotoUploadState = {
   previewUrl: avatarDraft.dataUrl,
 }
 
-const draft: ProfileDraft = {
+const buildDraft = (): ProfileDraft => ({
   profile: {
     fullName: 'Jane Doe',
     headline: 'Product Manager',
@@ -46,15 +49,40 @@ const draft: ProfileDraft = {
     interests: ['Tech'],
     location: 'Paris',
     availability: 'Soirées',
+    company: 'Meetinity ',
+    position: 'Product Manager',
+    skills: ['Product', 'Leadership'],
+    experiences: [
+      {
+        id: 'exp-1',
+        title: 'Product Manager',
+        company: 'Meetinity',
+        startDate: '2021-01-01',
+        endDate: '',
+        description: 'Responsable de la roadmap',
+      },
+      {
+        title: '',
+        company: '',
+        startDate: '',
+        endDate: '',
+        description: '',
+      },
+    ],
+    links: [
+      { label: ' LinkedIn ', url: ' https://linkedin.com/in/jane ' },
+      { label: '', url: '' },
+    ],
     avatarUrl: profile.avatarUrl,
   },
   preferences,
   updatedAt: new Date().toISOString(),
-}
+})
 
 describe('ProfileEditor', () => {
   it('submits the merged payload with preferences and avatar draft', async () => {
     const handleSave = vi.fn().mockResolvedValue(undefined)
+    const draft = buildDraft()
 
     render(
       <ProfileEditor
@@ -77,8 +105,23 @@ describe('ProfileEditor', () => {
     expect(handleSave).toHaveBeenCalledWith(
       expect.objectContaining({
         fullName: 'Jane Doe',
+        company: 'Meetinity',
+        position: 'Product Manager',
+        skills: ['Product', 'Leadership'],
         preferences: preferences,
         avatarUpload: avatarDraft,
+        experiences: [
+          {
+            id: 'exp-1',
+            title: 'Product Manager',
+            company: 'Meetinity',
+            startDate: '2021-01-01',
+            description: 'Responsable de la roadmap',
+          },
+        ],
+        links: [
+          { label: 'LinkedIn', url: 'https://linkedin.com/in/jane' },
+        ],
       }),
     )
   })
@@ -86,6 +129,7 @@ describe('ProfileEditor', () => {
   it('parses list inputs for profile and preferences', () => {
     const onFieldChange = vi.fn()
     const onPreferenceChange = vi.fn()
+    const draft = buildDraft()
 
     render(
       <ProfileEditor
@@ -106,6 +150,9 @@ describe('ProfileEditor', () => {
     fireEvent.change(screen.getByLabelText('Intérêts (séparés par des virgules)'), {
       target: { value: 'Design, IA' },
     })
+    fireEvent.change(screen.getByLabelText('Compétences (séparées par des virgules)'), {
+      target: { value: 'Produit, Leadership' },
+    })
     fireEvent.change(screen.getByLabelText('Industries ciblées'), {
       target: { value: 'Tech, Finance' },
     })
@@ -114,7 +161,40 @@ describe('ProfileEditor', () => {
     })
 
     expect(onFieldChange).toHaveBeenCalledWith('interests', ['Design', 'IA'])
+    expect(onFieldChange).toHaveBeenCalledWith('skills', ['Produit', 'Leadership'])
     expect(onPreferenceChange).toHaveBeenCalledWith('industries', ['Tech', 'Finance'])
     expect(onPreferenceChange).toHaveBeenCalledWith('interests', ['Communauté', 'Innovation'])
+  })
+
+  it('manages experiences and links collections', () => {
+    const onFieldChange = vi.fn()
+    const draft = buildDraft()
+    draft.profile.experiences = []
+    draft.profile.links = [{ label: 'Site', url: 'https://example.com' }]
+
+    render(
+      <ProfileEditor
+        profile={profile}
+        draft={draft}
+        avatarState={{ status: 'idle', draft: null }}
+        onFieldChange={onFieldChange}
+        onPreferenceChange={vi.fn()}
+        onAvatarSelect={vi.fn()}
+        onAvatarCrop={vi.fn()}
+        onAvatarConfirm={vi.fn()}
+        onAvatarReset={vi.fn()}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter une expérience' }))
+    expect(onFieldChange).toHaveBeenCalledWith('experiences', [
+      { title: '', company: '', startDate: undefined, endDate: undefined, description: undefined },
+    ])
+
+    const removeLinkButton = screen.getByRole('button', { name: 'Supprimer ce lien' })
+    fireEvent.click(removeLinkButton)
+    expect(onFieldChange).toHaveBeenCalledWith('links', [])
   })
 })

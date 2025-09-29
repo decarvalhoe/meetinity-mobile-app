@@ -4,18 +4,20 @@ import type {
   ProfileDraft,
   ProfilePreferences,
   ProfileUpdatePayload,
+  ProfileExperience,
+  ProfileLink,
   UserProfile,
 } from '../types'
 import type { PhotoUploadState } from '../services/photoUpload'
 import '../../shared.css'
 
-type ProfileFormFieldKey = 'fullName' | 'headline' | 'bio' | 'interests' | 'location' | 'availability'
+type ProfileFormFieldKey = Exclude<keyof ProfileUpdatePayload, 'preferences' | 'avatarUpload' | 'avatarUrl'>
 
 interface ProfileEditorProps {
-  profile: UserProfile
+  profile: UserProfile | null
   draft: ProfileDraft
   avatarState: PhotoUploadState
-  onFieldChange: (key: ProfileFormFieldKey, value: string | string[]) => void
+  onFieldChange: <Key extends ProfileFormFieldKey>(key: Key, value: ProfileUpdatePayload[Key]) => void
   onPreferenceChange: <Key extends keyof ProfilePreferences>(key: Key, value: ProfilePreferences[Key]) => void
   onAvatarSelect: (file: File) => Promise<void>
   onAvatarCrop: (crop: AvatarCropSettings) => void
@@ -72,6 +74,14 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({
       ...draft.profile,
       preferences: preferencesPayload,
     }
+    if (payload.company !== undefined) {
+      payload.company = payload.company?.trim() ?? ''
+    }
+    if (payload.position !== undefined) {
+      payload.position = payload.position?.trim() ?? ''
+    }
+    payload.experiences = sanitizeExperiencesForSubmit(payload.experiences)
+    payload.links = sanitizeLinksForSubmit(payload.links)
     if (avatarState.draft) {
       payload.avatarUpload = avatarState.draft
     }
@@ -105,7 +115,112 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({
     onAvatarCrop({ ...crop, ...patch })
   }
 
-  const showCurrentAvatar = avatarState.previewUrl ?? profile.avatarUrl
+  const showCurrentAvatar = avatarState.previewUrl ?? profile?.avatarUrl
+  const experiences = draft.profile.experiences ?? []
+  const links = draft.profile.links ?? []
+
+  const sanitizeExperiencePatch = (patch: Partial<ProfileExperience>): Partial<ProfileExperience> => {
+    const normalized: Partial<ProfileExperience> = { ...patch }
+    if ('startDate' in normalized && typeof normalized.startDate === 'string') {
+      normalized.startDate = normalized.startDate.trim() || undefined
+    }
+    if ('endDate' in normalized) {
+      const value = normalized.endDate
+      normalized.endDate = typeof value === 'string' ? (value.trim() || undefined) : value
+    }
+    if ('description' in normalized && typeof normalized.description === 'string') {
+      normalized.description = normalized.description.trim() || undefined
+    }
+    if ('title' in normalized && typeof normalized.title === 'string') {
+      normalized.title = normalized.title
+    }
+    if ('company' in normalized && typeof normalized.company === 'string') {
+      normalized.company = normalized.company
+    }
+    return normalized
+  }
+
+  const handleExperienceChange = (index: number, patch: Partial<ProfileExperience>) => {
+    const next = experiences.map((experience, idx) =>
+      idx === index ? { ...experience, ...sanitizeExperiencePatch(patch) } : experience,
+    )
+    onFieldChange('experiences', next)
+  }
+
+  const handleExperienceAdd = () => {
+    const next: ProfileExperience[] = [
+      ...experiences,
+      { title: '', company: '', startDate: undefined, endDate: undefined, description: undefined },
+    ]
+    onFieldChange('experiences', next)
+  }
+
+  const handleExperienceRemove = (index: number) => {
+    const next = experiences.filter((_, idx) => idx !== index)
+    onFieldChange('experiences', next)
+  }
+
+  const handleLinkChange = (index: number, patch: Partial<ProfileLink>) => {
+    const next = links.map((link, idx) => (idx === index ? { ...link, ...patch } : link))
+    onFieldChange('links', next)
+  }
+
+  const handleLinkAdd = () => {
+    const next: ProfileLink[] = [...links, { label: '', url: '' }]
+    onFieldChange('links', next)
+  }
+
+  const handleLinkRemove = (index: number) => {
+    const next = links.filter((_, idx) => idx !== index)
+    onFieldChange('links', next)
+  }
+
+  const sanitizeExperiencesForSubmit = (
+    items: ProfileExperience[] | undefined,
+  ): ProfileExperience[] | undefined => {
+    if (items === undefined) return undefined
+    const cleaned = items
+      .map((experience) => {
+        const title = (experience.title ?? '').trim()
+        const company = (experience.company ?? '').trim()
+        const startDate = experience.startDate?.trim()
+        const endDateRaw =
+          typeof experience.endDate === 'string' ? experience.endDate.trim() : experience.endDate ?? undefined
+        const description = experience.description?.trim()
+        const normalized: ProfileExperience = {
+          ...experience,
+          title,
+          company,
+          startDate: startDate || undefined,
+          endDate: endDateRaw === '' ? undefined : endDateRaw,
+          description: description || undefined,
+        }
+        if (!experience.id) {
+          delete normalized.id
+        }
+        return normalized
+      })
+      .filter(
+        (experience) =>
+          experience.title.length > 0 ||
+          experience.company.length > 0 ||
+          Boolean(experience.description) ||
+          Boolean(experience.startDate) ||
+          experience.endDate !== undefined,
+      )
+    return cleaned.length > 0 ? cleaned : []
+  }
+
+  const sanitizeLinksForSubmit = (items: ProfileLink[] | undefined): ProfileLink[] | undefined => {
+    if (items === undefined) return undefined
+    const cleaned = items
+      .map((link) => ({
+        label: (link.label ?? '').trim(),
+        url: (link.url ?? '').trim(),
+      }))
+      .filter((link) => link.label.length > 0 && link.url.length > 0)
+    return cleaned.length > 0 ? cleaned : []
+  }
 
   return (
     <form className="card" onSubmit={handleSubmit} aria-label="Édition du profil">
@@ -115,9 +230,15 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({
       <div className="form-group">
         <label htmlFor="avatar">Photo de profil</label>
         {showCurrentAvatar ? (
-          <img src={showCurrentAvatar} alt={draft.profile.fullName || profile.fullName} className="card__avatar" />
+          <img
+            src={showCurrentAvatar}
+            alt={draft.profile.fullName || profile?.fullName || 'Avatar utilisateur'}
+            className="card__avatar"
+          />
         ) : (
-          <div className="card__avatar card__avatar--placeholder">{(draft.profile.fullName || profile.fullName).charAt(0)}</div>
+          <div className="card__avatar card__avatar--placeholder">
+            {(draft.profile.fullName || profile?.fullName || '?').charAt(0)}
+          </div>
         )}
         <input id="avatar" type="file" accept="image/*" onChange={handleFileChange} disabled={busy} />
         {avatarState.draft && (
@@ -217,6 +338,32 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({
       </div>
       <div className="form-grid">
         <div className="form-group">
+          <label htmlFor="company">Société</label>
+          <input
+            id="company"
+            value={draft.profile.company ?? ''}
+            onChange={(event) => onFieldChange('company', event.target.value)}
+          />
+        </div>
+        <div className="form-group">
+          <label htmlFor="position">Poste</label>
+          <input
+            id="position"
+            value={draft.profile.position ?? ''}
+            onChange={(event) => onFieldChange('position', event.target.value)}
+          />
+        </div>
+      </div>
+      <div className="form-group">
+        <label htmlFor="skills">Compétences (séparées par des virgules)</label>
+        <input
+          id="skills"
+          value={(draft.profile.skills ?? []).join(', ')}
+          onChange={(event) => onFieldChange('skills', parseList(event.target.value))}
+        />
+      </div>
+      <div className="form-grid">
+        <div className="form-group">
           <label htmlFor="location">Localisation</label>
           <input
             id="location"
@@ -263,6 +410,111 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({
             onChange={(event) => handlePreferenceInterests(event.target.value)}
           />
         </label>
+      </fieldset>
+      <fieldset className="form-group">
+        <legend>Expériences professionnelles</legend>
+        {experiences.length === 0 && <p className="help-text">Ajoutez vos expériences marquantes.</p>}
+        {experiences.map((experience, index) => (
+          <div key={`experience-${index}`} className="form-group">
+            <div className="form-grid">
+              <label className="form-group">
+                <span>Intitulé</span>
+                <input
+                  value={experience.title ?? ''}
+                  onChange={(event) => handleExperienceChange(index, { title: event.target.value })}
+                  disabled={busy}
+                />
+              </label>
+              <label className="form-group">
+                <span>Société</span>
+                <input
+                  value={experience.company ?? ''}
+                  onChange={(event) => handleExperienceChange(index, { company: event.target.value })}
+                  disabled={busy}
+                />
+              </label>
+            </div>
+            <div className="form-grid">
+              <label className="form-group">
+                <span>Début</span>
+                <input
+                  type="date"
+                  value={experience.startDate ?? ''}
+                  onChange={(event) => handleExperienceChange(index, { startDate: event.target.value })}
+                  disabled={busy}
+                />
+              </label>
+              <label className="form-group">
+                <span>Fin</span>
+                <input
+                  type="date"
+                  value={experience.endDate ?? ''}
+                  onChange={(event) => handleExperienceChange(index, { endDate: event.target.value || undefined })}
+                  disabled={busy}
+                />
+              </label>
+            </div>
+            <label className="form-group">
+              <span>Description</span>
+              <textarea
+                rows={2}
+                value={experience.description ?? ''}
+                onChange={(event) => handleExperienceChange(index, { description: event.target.value })}
+                disabled={busy}
+              />
+            </label>
+            <div className="card__footer card__footer--actions">
+              <button
+                type="button"
+                className="link"
+                onClick={() => handleExperienceRemove(index)}
+                disabled={busy}
+              >
+                Supprimer cette expérience
+              </button>
+            </div>
+          </div>
+        ))}
+        <button type="button" className="secondary" onClick={handleExperienceAdd} disabled={busy}>
+          Ajouter une expérience
+        </button>
+      </fieldset>
+      <fieldset className="form-group">
+        <legend>Liens publics</legend>
+        {links.length === 0 && <p className="help-text">Partagez vos profils sociaux ou portfolio.</p>}
+        {links.map((link, index) => (
+          <div key={`link-${index}`} className="form-grid">
+            <label className="form-group">
+              <span>Libellé</span>
+              <input
+                value={link.label ?? ''}
+                onChange={(event) => handleLinkChange(index, { label: event.target.value })}
+                disabled={busy}
+              />
+            </label>
+            <label className="form-group">
+              <span>URL</span>
+              <input
+                value={link.url ?? ''}
+                onChange={(event) => handleLinkChange(index, { url: event.target.value })}
+                disabled={busy}
+              />
+            </label>
+            <div className="card__footer card__footer--actions">
+              <button
+                type="button"
+                className="link"
+                onClick={() => handleLinkRemove(index)}
+                disabled={busy}
+              >
+                Supprimer ce lien
+              </button>
+            </div>
+          </div>
+        ))}
+        <button type="button" className="secondary" onClick={handleLinkAdd} disabled={busy}>
+          Ajouter un lien
+        </button>
       </fieldset>
       {error && (
         <p role="alert" className="error-text">

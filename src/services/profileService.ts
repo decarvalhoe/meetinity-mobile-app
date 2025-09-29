@@ -6,20 +6,15 @@ const profileService = {
   async getProfile(): Promise<UserProfile> {
     return apiClient.get<UserProfile>('/profile')
   },
+  async createProfile(update: ProfileUpdatePayload): Promise<UserProfile> {
+    const payload = await prepareProfileMutation(update)
+    return apiClient.post<UserProfile>('/profile', payload)
+  },
   async updateProfile(update: ProfileUpdatePayload): Promise<UserProfile> {
-    const { avatarUpload, ...payload } = update
-    let resolvedAvatarUrl = update.avatarUrl
-    if (avatarUpload) {
-      const { url } = await photoUpload.upload()
-      resolvedAvatarUrl = url
-    }
-    const body = { ...payload }
-    if (resolvedAvatarUrl) {
-      body.avatarUrl = resolvedAvatarUrl
-    }
-    const profile = await apiClient.put<UserProfile>('/profile', body)
-    if (resolvedAvatarUrl && !profile.avatarUrl) {
-      return { ...profile, avatarUrl: resolvedAvatarUrl }
+    const payload = await prepareProfileMutation(update)
+    const profile = await apiClient.put<UserProfile>('/profile', payload)
+    if (payload.avatarUrl && !profile.avatarUrl) {
+      return { ...profile, avatarUrl: payload.avatarUrl }
     }
     return profile
   },
@@ -29,3 +24,17 @@ const profileService = {
 }
 
 export default profileService
+
+const prepareProfileMutation = async (update: ProfileUpdatePayload) => {
+  const { avatarUpload, ...payload } = update
+  let resolvedAvatarUrl = update.avatarUrl
+  if (avatarUpload) {
+    const { url } = await photoUpload.upload()
+    resolvedAvatarUrl = url
+  }
+  const body = { ...payload }
+  if (resolvedAvatarUrl) {
+    body.avatarUrl = resolvedAvatarUrl
+  }
+  return body
+}

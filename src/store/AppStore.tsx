@@ -819,13 +819,16 @@ const isOfflineError = (error: unknown): boolean => {
 }
 
 const mergeProfileUpdate = (profile: UserProfile, update: ProfileUpdatePayload): UserProfile => {
-  const { avatarUpload, preferences, interests, avatarUrl, ...rest } = update
+  const { avatarUpload, preferences, interests, skills, experiences, links, avatarUrl, ...rest } = update
   const optimisticAvatar = avatarUrl ?? avatarUpload?.dataUrl ?? profile.avatarUrl
   const next: UserProfile = {
     ...profile,
     ...rest,
     avatarUrl: optimisticAvatar,
     interests: interests ?? profile.interests,
+    skills: skills ?? profile.skills,
+    experiences: experiences ?? profile.experiences,
+    links: links ?? profile.links,
   }
   if (preferences) {
     next.preferences = {
@@ -1197,7 +1200,9 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         dispatch({ type: 'profile/loading' })
       }
       try {
-        const profile = await profileService.updateProfile(update)
+        const profile = previous
+          ? await profileService.updateProfile(update)
+          : await profileService.createProfile(update)
         dispatch({ type: 'profile/success', payload: profile })
         profileRef.current = profile
         appCache.write(PROFILE_CACHE_KEY, profile, PROFILE_CACHE_POLICY)

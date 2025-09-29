@@ -6,6 +6,7 @@ import TabLayout from './TabLayout'
 const LoginScreen = React.lazy(() => import('../screens/LoginScreen'))
 const OAuthCallback = React.lazy(() => import('../screens/OAuthCallback'))
 const ProfileScreen = React.lazy(() => import('../features/profile/screens/ProfileScreen'))
+const ProfileCreateScreen = React.lazy(() => import('../features/profile/screens/ProfileCreateScreen'))
 const DiscoveryScreen = React.lazy(() => import('../features/discovery/screens/DiscoveryScreen'))
 const EventsScreen = React.lazy(() => import('../features/events/screens/EventsScreen'))
 const EventListScreen = React.lazy(() => import('../features/events/screens/EventListScreen'))
@@ -41,6 +42,7 @@ const AppRouter: React.FC = () => (
           }
         >
           <Route index element={<Navigate to="profile" replace />} />
+          <Route path="profile/create" element={<ProfileCreateScreen />} />
           <Route path="profile" element={<ProfileScreen />} />
           <Route path="discovery" element={<DiscoveryScreen />} />
           <Route path="events" element={<EventsScreen />}>
