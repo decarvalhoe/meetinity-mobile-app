@@ -5,6 +5,14 @@ import EventSearchBar from '../components/EventSearchBar'
 import type { EventListFilters, EventSortOption } from '../types'
 import { useAppStore } from '../../../store/AppStore'
 import '../../shared.css'
+import {
+  ErrorState,
+  LoadingState,
+  OfflinePlaceholder,
+  ScreenState,
+  SkeletonBlock,
+  useOnlineStatus,
+} from '../../shared'
 
 const DEFAULT_SORT: EventSortOption = 'upcoming'
 
@@ -16,6 +24,7 @@ const normalizeFilters = (filters: EventListFilters): EventListFilters => ({
 const EventListScreen: React.FC = () => {
   const navigate = useNavigate()
   const { state, refreshEvents, toggleEventRegistration } = useAppStore()
+  const isOnline = useOnlineStatus()
   const [categoryId, setCategoryId] = useState(state.events.data.filters.categoryId ?? '')
   const [location, setLocation] = useState(state.events.data.filters.location ?? '')
   const [startDate, setStartDate] = useState(state.events.data.filters.startDate ?? '')
@@ -199,17 +208,44 @@ const EventListScreen: React.FC = () => {
         </div>
       </form>
 
-      {hasError && state.events.data.items.length === 0 && (
-        <div className="error-state" role="alert">
-          Impossible de récupérer les événements.{' '}
-          <button type="button" onClick={() => refreshEvents(state.events.data.filters, 1)}>
-            Réessayer
-          </button>
-        </div>
+      {!isOnline && state.events.data.items.length === 0 && (
+        <OfflinePlaceholder
+          description="Reconnectez-vous pour voir les événements disponibles."
+          onRetry={() => refreshEvents(state.events.data.filters, 1)}
+        />
+      )}
+
+      {hasError && state.events.data.items.length === 0 && isOnline && (
+        <ErrorState
+          description={state.events.error ?? 'Impossible de récupérer les événements.'}
+          onRetry={() => refreshEvents(state.events.data.filters, 1)}
+        />
       )}
 
       {isInitialLoading ? (
-        <p className="loading">Chargement des événements…</p>
+        <LoadingState
+          title="Chargement des événements"
+          description="Nous récupérons les opportunités à venir."
+          skeleton={
+            <div className="skeleton-group">
+              {[...Array(2)].map((_, index) => (
+                <div key={index} className="skeleton-card">
+                  <div className="skeleton-card__header">
+                    <div className="skeleton-group">
+                      <SkeletonBlock height={18} width="60%" />
+                      <SkeletonBlock height={14} width="40%" />
+                    </div>
+                    <SkeletonBlock height={20} width={96} />
+                  </div>
+                  <div className="skeleton-card__body">
+                    <SkeletonBlock height={12} />
+                    <SkeletonBlock height={12} width="80%" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          }
+        />
       ) : (
         <div className="events-grid">
           {state.events.data.items.map((event) => {
@@ -234,7 +270,16 @@ const EventListScreen: React.FC = () => {
       )}
 
       {state.events.data.items.length === 0 && !isInitialLoading && !hasError && (
-        <p className="loading">Aucun événement ne correspond à votre recherche.</p>
+        <ScreenState
+          tone="info"
+          title="Aucun événement disponible"
+          description="Essayez d'élargir vos filtres ou revenez plus tard."
+          actions={
+            <button type="button" className="secondary" onClick={() => refreshEvents(normalizeFilters({}), 1)}>
+              Réinitialiser les filtres
+            </button>
+          }
+        />
       )}
 
       {state.events.data.hasMore && (
@@ -243,6 +288,10 @@ const EventListScreen: React.FC = () => {
             {isPaginating ? 'Chargement…' : 'Charger plus'}
           </button>
         </div>
+      )}
+
+      {isPaginating && (
+        <LoadingState inline title="Chargement supplémentaire" description="Nous ajoutons plus d'événements." />
       )}
     </section>
   )

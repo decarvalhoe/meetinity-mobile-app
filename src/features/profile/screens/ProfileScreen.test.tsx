@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import React from 'react'
 import { vi } from 'vitest'
 import ProfileScreen from './ProfileScreen'
+import type { AppState, AppStoreValue } from '../../../store/AppStore'
 
 const mockUseAppStore = vi.fn()
 
@@ -9,50 +10,77 @@ vi.mock('../../../store/AppStore', () => ({
   useAppStore: () => mockUseAppStore(),
 }))
 
-const baseState = {
-  matches: { status: 'idle', data: [] },
-  events: { status: 'idle', data: [] },
-  conversations: { status: 'idle', data: [] },
-  messages: {},
-  activeConversationId: null,
-} as const
-
-interface StoreStub {
-  state: any
-  refreshProfile: ReturnType<typeof vi.fn>
-  saveProfile: ReturnType<typeof vi.fn>
-  refreshMatches: ReturnType<typeof vi.fn>
-  acceptMatch: ReturnType<typeof vi.fn>
-  declineMatch: ReturnType<typeof vi.fn>
-  refreshEvents: ReturnType<typeof vi.fn>
-  toggleEventRegistration: ReturnType<typeof vi.fn>
-  refreshConversations: ReturnType<typeof vi.fn>
-  loadMessages: ReturnType<typeof vi.fn>
-  sendMessage: ReturnType<typeof vi.fn>
-  setActiveConversation: ReturnType<typeof vi.fn>
-}
-
-const createStore = (overrides: Partial<StoreStub> = {}): StoreStub => ({
-  state: { ...baseState, profile: { status: 'success', data: profile } },
-  refreshProfile: vi.fn(),
-  saveProfile: vi.fn(),
-  refreshMatches: vi.fn(),
-  acceptMatch: vi.fn(),
-  declineMatch: vi.fn(),
-  refreshEvents: vi.fn(),
-  toggleEventRegistration: vi.fn(),
-  refreshConversations: vi.fn(),
-  loadMessages: vi.fn(),
-  sendMessage: vi.fn(),
-  setActiveConversation: vi.fn(),
-  ...overrides,
-})
-
 const profile = {
   id: 'user-1',
   fullName: 'Jane Doe',
   headline: 'Product Manager',
   interests: ['Tech'],
+}
+
+const createBaseState = (): AppState => ({
+  profile: { status: 'success', data: profile },
+  matches: { status: 'idle', data: [] },
+  events: {
+    status: 'idle',
+    data: { items: [], page: 1, pageSize: 20, total: 0, hasMore: false, filters: {} },
+  },
+  conversations: { status: 'idle', data: [] },
+  messages: {},
+  activeConversationId: null,
+  pendingMessages: [],
+  messagingRealtime: { status: 'disconnected', sessionId: null, since: null, presence: {} },
+  matchFeedMeta: null,
+  pendingMatchActions: [],
+  matchNotifications: [],
+  eventDetails: {},
+  pendingEventRegistrations: [],
+})
+
+const createState = (overrides: Partial<AppState>): AppState => ({
+  ...createBaseState(),
+  ...overrides,
+})
+
+type StoreStub = Pick<
+  AppStoreValue,
+  |
+    'state'
+    | 'refreshProfile'
+    | 'saveProfile'
+    | 'refreshMatches'
+    | 'acceptMatch'
+    | 'declineMatch'
+    | 'refreshEvents'
+    | 'toggleEventRegistration'
+    | 'refreshConversations'
+    | 'loadMessages'
+    | 'sendMessage'
+    | 'setActiveConversation'
+    | 'acknowledgeMatchNotification'
+>
+
+const createStore = (overrides: Partial<StoreStub> = {}): StoreStub => {
+  const base: StoreStub = {
+    state: createBaseState(),
+    refreshProfile: vi.fn(async () => {}),
+    saveProfile: vi.fn(async () => {}),
+    refreshMatches: vi.fn(async () => {}),
+    acceptMatch: vi.fn(async () => {}),
+    declineMatch: vi.fn(async () => {}),
+    refreshEvents: vi.fn(async () => {}),
+    toggleEventRegistration: vi.fn(async () => {}),
+    refreshConversations: vi.fn(async () => {}),
+    loadMessages: vi.fn(async () => {}),
+    sendMessage: vi.fn(async () => {}),
+    setActiveConversation: vi.fn(),
+    acknowledgeMatchNotification: vi.fn(),
+  }
+
+  return {
+    ...base,
+    ...overrides,
+    state: overrides.state ?? base.state,
+  }
 }
 
 describe('ProfileScreen', () => {
@@ -63,7 +91,10 @@ describe('ProfileScreen', () => {
   it('render loading state while profile is being fetched', () => {
     const refreshProfile = vi.fn()
     mockUseAppStore.mockReturnValue(
-      createStore({ state: { ...baseState, profile: { status: 'loading', data: null } }, refreshProfile }),
+      createStore({
+        state: createState({ profile: { status: 'loading', data: null } }),
+        refreshProfile,
+      }),
     )
 
     render(<ProfileScreen />)
@@ -75,7 +106,10 @@ describe('ProfileScreen', () => {
   it('triggers refresh when profile state is idle', () => {
     const refreshProfile = vi.fn()
     mockUseAppStore.mockReturnValue(
-      createStore({ state: { ...baseState, profile: { status: 'idle', data: null } }, refreshProfile }),
+      createStore({
+        state: createState({ profile: { status: 'idle', data: null } }),
+        refreshProfile,
+      }),
     )
 
     render(<ProfileScreen />)

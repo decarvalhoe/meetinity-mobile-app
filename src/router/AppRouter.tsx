@@ -12,6 +12,19 @@ import EventDetailScreen from '../features/events/screens/EventDetailScreen'
 import MyEventsScreen from '../features/events/screens/MyEventsScreen'
 import MessagingScreen from '../features/messaging/screens/MessagingScreen'
 
+/**
+ * Définition centralisée des transitions entre les modules applicatifs.
+ *
+ * - Utilisateur non authentifié → `/login` puis `/app/...` après connexion (AuthProvider).
+ * - Module principal `/app` protégé par `ProtectedRoute`.
+ * - Entrée par défaut : `/app/profile` (profil) pour garantir l'initialisation du store utilisateur.
+ * - Navigation imbriquée :
+ *   - `/app/events` → liste → `/app/events/:eventId` pour le détail.
+ *   - `/app/events/mine` pour les événements inscrits.
+ *   - `/app/messaging` gère les conversations ↔ chat via l'état global.
+ * - Routes de repli : toute URL inconnue redirige vers `/app/profile`.
+ */
+
 const AppRouter: React.FC = () => (
   <BrowserRouter>
     <Routes>

@@ -5,6 +5,7 @@ import { useAppStore } from '../../../store/AppStore'
 import { useAuth } from '../../../auth/AuthContext'
 import type { Attachment } from '../types'
 import '../../shared.css'
+import { OfflinePlaceholder, ScreenState, useOnlineStatus } from '../../shared'
 
 interface ChatScreenProps {
   conversationId?: string
@@ -26,6 +27,7 @@ const formatPresence = (status?: string) => {
 const ChatScreen: React.FC<ChatScreenProps> = ({ conversationId }) => {
   const { state, loadMessages, sendMessage, markConversationRead, retryMessage, setTypingState } = useAppStore()
   const { user } = useAuth()
+  const isOnline = useOnlineStatus()
 
   const activeConversationId = conversationId ?? state.activeConversationId ?? state.conversations.data[0]?.id ?? null
   const conversation = useMemo(
@@ -66,7 +68,11 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ conversationId }) => {
   if (!activeConversationId || !conversation) {
     return (
       <section className="conversation-panel">
-        <p className="loading">Sélectionnez une conversation pour commencer à discuter.</p>
+        <ScreenState
+          tone="info"
+          title="Aucune conversation sélectionnée"
+          description="Choisissez un fil de discussion pour afficher les messages."
+        />
       </section>
     )
   }
@@ -92,6 +98,13 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ conversationId }) => {
           Session&nbsp;: {state.messagingRealtime.status}
         </span>
       </header>
+      {!isOnline && (
+        <OfflinePlaceholder
+          description="Vous pouvez continuer à écrire vos messages, ils seront envoyés à la reconnexion."
+          retryLabel="Vérifier la connexion"
+          onRetry={() => loadMessages(activeConversationId)}
+        />
+      )}
       <MessageTimeline
         messages={messages}
         currentUserId={user?.id}

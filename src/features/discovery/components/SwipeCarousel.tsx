@@ -4,6 +4,14 @@ import MatchCard from './MatchCard'
 import { useAppStore } from '../../../store/AppStore'
 import type { MatchFeedItem } from '../types'
 import '../../shared.css'
+import {
+  ErrorState,
+  LoadingState,
+  OfflinePlaceholder,
+  ScreenState,
+  SkeletonBlock,
+  useOnlineStatus,
+} from '../../shared'
 
 const swipeVariants = {
   enter: (direction: number) => ({
@@ -28,6 +36,7 @@ const swipeVariants = {
 
 const SwipeCarousel: React.FC = () => {
   const { state, acceptMatch, declineMatch, refreshMatches } = useAppStore()
+  const isOnline = useOnlineStatus()
   const [index, setIndex] = useState(0)
   const [direction, setDirection] = useState<1 | -1>(1)
   const pendingSync = state.pendingMatchActions.length
@@ -79,29 +88,65 @@ const SwipeCarousel: React.FC = () => {
     [acceptMatch, declineMatch, queue],
   )
 
+  if (!isOnline && state.matches.data.length === 0) {
+    return (
+      <OfflinePlaceholder
+        description="Connectez-vous à Internet pour voir les nouvelles recommandations."
+        onRetry={refreshMatches}
+      />
+    )
+  }
+
   if (state.matches.status === 'loading' && state.matches.data.length === 0) {
-    return <div className="loading">Recherche de profils pertinents…</div>
+    return (
+      <LoadingState
+        title="Recherche de profils"
+        description="Nous recherchons des recommandations alignées avec vos intérêts."
+        skeleton={
+          <div className="skeleton-card">
+            <div className="skeleton-card__header">
+              <SkeletonBlock width={96} height={96} shape="circle" />
+              <div className="skeleton-group">
+                <SkeletonBlock height={16} width="80%" />
+                <SkeletonBlock height={14} width="55%" />
+              </div>
+            </div>
+            <div className="skeleton-card__body">
+              <SkeletonBlock height={12} />
+              <SkeletonBlock height={12} />
+              <SkeletonBlock height={12} width="85%" />
+            </div>
+          </div>
+        }
+      />
+    )
   }
 
   if (state.matches.status === 'error' && !hasCachedMatches) {
     return (
-      <div className="error-state" role="alert">
-        Impossible de récupérer les matchs. <button onClick={refreshMatches}>Réessayer</button>
-      </div>
+      <ErrorState
+        description={state.matches.error ?? 'Impossible de récupérer les matchs.'}
+        onRetry={refreshMatches}
+      />
     )
   }
 
   if (!current) {
     return (
-      <div className="empty-state">
-        <p>Aucun nouveau profil à présenter pour le moment.</p>
-        <button type="button" className="secondary" onClick={refreshMatches}>
-          Actualiser le flux
-        </button>
+      <ScreenState
+        tone="info"
+        title="Pas de nouvelles rencontres"
+        description="Repassez un peu plus tard ou rafraîchissez le flux pour voir les nouveaux profils."
+        actions={
+          <button type="button" className="secondary" onClick={refreshMatches}>
+            Actualiser le flux
+          </button>
+        }
+      >
         {pendingSync > 0 && (
           <p className="hint">{pendingSync} action(s) seront synchronisées dès que la connexion reviendra.</p>
         )}
-      </div>
+      </ScreenState>
     )
   }
 
