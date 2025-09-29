@@ -126,6 +126,111 @@ describe('ProfileEditor', () => {
     )
   })
 
+  it('prevents submission and shows validation errors for missing and invalid fields', () => {
+    const handleSave = vi.fn()
+    const draft = buildDraft()
+    draft.profile.fullName = ''
+    draft.profile.headline = ''
+    draft.profile.bio = 'a'.repeat(350)
+    draft.profile.interests = []
+    draft.profile.links = [{ label: 'Portfolio', url: 'notaurl' }]
+    draft.preferences.discoveryRadiusKm = -10
+
+    render(
+      <ProfileEditor
+        profile={profile}
+        draft={draft}
+        avatarState={{ status: 'idle', draft: null }}
+        onFieldChange={vi.fn()}
+        onPreferenceChange={vi.fn()}
+        onAvatarSelect={vi.fn()}
+        onAvatarCrop={vi.fn()}
+        onAvatarConfirm={vi.fn()}
+        onAvatarReset={vi.fn()}
+        onSave={handleSave}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('La bio ne doit pas dépasser 280 caractères.')).toBeInTheDocument()
+    expect(screen.queryByText('Le nom complet est requis.')).not.toBeInTheDocument()
+
+    fireEvent.submit(screen.getByRole('form', { name: 'Édition du profil' }))
+
+    expect(handleSave).not.toHaveBeenCalled()
+    expect(screen.getByText('Le nom complet est requis.')).toBeInTheDocument()
+    expect(screen.getByText('Le titre est requis.')).toBeInTheDocument()
+    expect(screen.getByText('Ajoutez au moins un intérêt.')).toBeInTheDocument()
+    expect(screen.getByText("L'URL doit être valide.")).toBeInTheDocument()
+    expect(screen.getByText('Indiquez un rayon valide (en kilomètres).')).toBeInTheDocument()
+    expect(screen.getByLabelText('Nom complet')).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('allows submission once validation errors are fixed', async () => {
+    const handleSave = vi.fn().mockResolvedValue(undefined)
+    const initialDraft = buildDraft()
+    initialDraft.profile.fullName = ''
+    initialDraft.profile.headline = ''
+    initialDraft.profile.interests = []
+    initialDraft.profile.links = [{ label: 'Portfolio', url: 'notaurl' }]
+    initialDraft.preferences.discoveryRadiusKm = -5
+
+    const { rerender } = render(
+      <ProfileEditor
+        profile={profile}
+        draft={initialDraft}
+        avatarState={{ status: 'idle', draft: null }}
+        onFieldChange={vi.fn()}
+        onPreferenceChange={vi.fn()}
+        onAvatarSelect={vi.fn()}
+        onAvatarCrop={vi.fn()}
+        onAvatarConfirm={vi.fn()}
+        onAvatarReset={vi.fn()}
+        onSave={handleSave}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    fireEvent.submit(screen.getByRole('form', { name: 'Édition du profil' }))
+    expect(handleSave).not.toHaveBeenCalled()
+
+    const validDraft: ProfileDraft = {
+      ...initialDraft,
+      profile: {
+        ...initialDraft.profile,
+        fullName: 'Jane Doe',
+        headline: 'Product Manager',
+        bio: 'Bio valide',
+        interests: ['Tech'],
+        links: [{ label: 'Portfolio', url: 'https://example.com' }],
+      },
+      preferences: {
+        ...initialDraft.preferences,
+        discoveryRadiusKm: 15,
+      },
+    }
+
+    rerender(
+      <ProfileEditor
+        profile={profile}
+        draft={validDraft}
+        avatarState={{ status: 'idle', draft: null }}
+        onFieldChange={vi.fn()}
+        onPreferenceChange={vi.fn()}
+        onAvatarSelect={vi.fn()}
+        onAvatarCrop={vi.fn()}
+        onAvatarConfirm={vi.fn()}
+        onAvatarReset={vi.fn()}
+        onSave={handleSave}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    fireEvent.submit(screen.getByRole('form', { name: 'Édition du profil' }))
+
+    expect(handleSave).toHaveBeenCalledTimes(1)
+  })
+
   it('parses list inputs for profile and preferences', () => {
     const onFieldChange = vi.fn()
     const onPreferenceChange = vi.fn()
