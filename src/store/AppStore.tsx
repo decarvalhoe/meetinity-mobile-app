@@ -130,6 +130,7 @@ const createInitialState = (): AppState => ({
 type AppAction =
   | { type: 'profile/loading' }
   | { type: 'profile/success'; payload: UserProfile }
+  | { type: 'profile/optimistic'; payload: UserProfile }
   | { type: 'profile/error'; error: string }
   | { type: 'matches/loading' }
   | { type: 'matches/success'; payload: MatchFeedItem[] }
@@ -171,6 +172,8 @@ const reducer = (state: AppState, action: AppAction): AppState => {
       return { ...state, profile: { ...state.profile, status: 'loading', error: undefined } }
     case 'profile/success':
       return { ...state, profile: { status: 'success', data: action.payload } }
+    case 'profile/optimistic':
+      return { ...state, profile: { status: 'loading', data: action.payload } }
     case 'profile/error':
       return { ...state, profile: { ...state.profile, status: 'error', error: action.error } }
     case 'matches/loading':
@@ -778,6 +781,26 @@ const isOfflineError = (error: unknown): boolean => {
   return false
 }
 
+const mergeProfileUpdate = (profile: UserProfile, update: ProfileUpdatePayload): UserProfile => {
+  const { avatarUpload, preferences, interests, avatarUrl, ...rest } = update
+  const optimisticAvatar = avatarUrl ?? avatarUpload?.dataUrl ?? profile.avatarUrl
+  const next: UserProfile = {
+    ...profile,
+    ...rest,
+    avatarUrl: optimisticAvatar,
+    interests: interests ?? profile.interests,
+  }
+  if (preferences) {
+    next.preferences = {
+      discoveryRadiusKm: preferences.discoveryRadiusKm ?? profile.preferences?.discoveryRadiusKm ?? 0,
+      industries: preferences.industries ?? profile.preferences?.industries ?? [],
+      interests: preferences.interests ?? profile.preferences?.interests ?? [],
+      eventTypes: preferences.eventTypes ?? profile.preferences?.eventTypes ?? [],
+    }
+  }
+  return next
+}
+
 const serializeFilters = (filters: EventListFilters): string => {
   const entries = Object.entries(filters)
     .filter(([, value]) => value !== undefined && value !== null && value !== '')
@@ -838,6 +861,7 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [dispatch],
   )
 
+  const profileRef = useRef<UserProfile | null>(state.profile.data)
   const matchesRef = useRef<MatchFeedItem[]>(state.matches.data)
 
   const eventsStateRef = useRef<EventListState>(state.events.data)
@@ -1018,10 +1042,12 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         dispatch({ type: 'profile/loading' })
       } else {
         dispatch({ type: 'profile/success', payload: cached.value })
+        profileRef.current = cached.value
       }
       try {
         const profile = await profileService.getProfile()
         dispatch({ type: 'profile/success', payload: profile })
+        profileRef.current = profile
         appCache.write(PROFILE_CACHE_KEY, profile, PROFILE_CACHE_POLICY)
       } catch (error) {
         if (!cached.value) {
@@ -1037,17 +1063,32 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const saveProfile = useCallback(
     async (update: ProfileUpdatePayload) => {
       if (!token) return
-      dispatch({ type: 'profile/loading' })
+      const previous = profileRef.current ?? state.profile.data
+      if (previous) {
+        const optimistic = mergeProfileUpdate(previous, update)
+        dispatch({ type: 'profile/optimistic', payload: optimistic })
+        profileRef.current = optimistic
+        appCache.write(PROFILE_CACHE_KEY, optimistic, PROFILE_CACHE_POLICY)
+      } else {
+        dispatch({ type: 'profile/loading' })
+      }
       try {
         const profile = await profileService.updateProfile(update)
         dispatch({ type: 'profile/success', payload: profile })
+        profileRef.current = profile
         appCache.write(PROFILE_CACHE_KEY, profile, PROFILE_CACHE_POLICY)
       } catch (error) {
-        dispatch({ type: 'profile/error', error: (error as Error).message })
+        if (previous) {
+          dispatch({ type: 'profile/success', payload: previous })
+          profileRef.current = previous
+          appCache.write(PROFILE_CACHE_KEY, previous, PROFILE_CACHE_POLICY)
+        } else {
+          dispatch({ type: 'profile/error', error: (error as Error).message })
+        }
         throw error
       }
     },
-    [token],
+    [token, state.profile.data],
   )
 
   const refreshMatches = useCallback(
@@ -1627,6 +1668,10 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const acknowledgeMatchNotification = useCallback((matchId: string) => {
     dispatch({ type: 'matches/notification/ack', payload: matchId })
   }, [])
+
+  useEffect(() => {
+    profileRef.current = state.profile.data
+  }, [state.profile.data])
 
   const value = useMemo<AppStoreValue>(
     () => ({

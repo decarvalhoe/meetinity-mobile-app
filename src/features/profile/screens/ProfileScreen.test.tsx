@@ -5,9 +5,21 @@ import ProfileScreen from './ProfileScreen'
 import type { AppState, AppStoreValue } from '../../../store/AppStore'
 
 const mockUseAppStore = vi.fn()
+const getPreferencesMock = vi.fn().mockResolvedValue({
+  discoveryRadiusKm: 25,
+  industries: [],
+  interests: [],
+  eventTypes: [],
+})
 
 vi.mock('../../../store/AppStore', () => ({
   useAppStore: () => mockUseAppStore(),
+}))
+
+vi.mock('../../../services/profileService', () => ({
+  default: {
+    getPreferences: (...args: unknown[]) => getPreferencesMock(...args),
+  },
 }))
 
 const profile = {
@@ -99,7 +111,7 @@ describe('ProfileScreen', () => {
 
     render(<ProfileScreen />)
 
-    expect(screen.getByText('Chargement du profil…')).toBeInTheDocument()
+    expect(screen.getByText('Chargement du profil')).toBeInTheDocument()
     expect(refreshProfile).not.toHaveBeenCalled()
   })
 
