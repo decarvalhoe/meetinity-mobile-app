@@ -44,8 +44,10 @@ const createBaseState = (): AppState => ({
   matchFeedMeta: null,
   pendingMatchActions: [],
   matchNotifications: [],
+  messageNotifications: [],
   eventDetails: {},
   pendingEventRegistrations: [],
+  notificationPermission: 'default',
 })
 
 const createState = (overrides: Partial<AppState>): AppState => ({
@@ -69,6 +71,9 @@ type StoreStub = Pick<
     | 'sendMessage'
     | 'setActiveConversation'
     | 'acknowledgeMatchNotification'
+    | 'acknowledgeMessageNotification'
+    | 'requestNotificationPermission'
+    | 'ensureNotificationPermission'
 >
 
 const createStore = (overrides: Partial<StoreStub> = {}): StoreStub => {
@@ -86,6 +91,9 @@ const createStore = (overrides: Partial<StoreStub> = {}): StoreStub => {
     sendMessage: vi.fn(async () => {}),
     setActiveConversation: vi.fn(),
     acknowledgeMatchNotification: vi.fn(),
+    acknowledgeMessageNotification: vi.fn(),
+    requestNotificationPermission: vi.fn(async () => 'default'),
+    ensureNotificationPermission: vi.fn(),
   }
 
   return {

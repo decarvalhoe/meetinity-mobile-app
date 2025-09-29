@@ -33,8 +33,10 @@ const createBaseStore = () => ({
     matchFeedMeta: null,
     pendingMatchActions: [],
     matchNotifications: [],
+    messageNotifications: [],
     eventDetails: {},
     pendingEventRegistrations: [],
+    notificationPermission: 'default',
   },
   refreshProfile: vi.fn(),
   saveProfile: vi.fn(),
@@ -49,6 +51,9 @@ const createBaseStore = () => ({
   sendMessage: vi.fn(),
   setActiveConversation: vi.fn(),
   acknowledgeMatchNotification: vi.fn(),
+  acknowledgeMessageNotification: vi.fn(),
+  requestNotificationPermission: vi.fn(async () => 'default'),
+  ensureNotificationPermission: vi.fn(),
 })
 
 describe('Events flow screens', () => {
@@ -201,7 +206,7 @@ describe('Events flow screens', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByText(/Mode hors connexion/)).toBeInTheDocument()
+    expect(screen.getByText('Vous êtes hors ligne')).toBeInTheDocument()
     expect(screen.getByText('Atelier UX')).toBeInTheDocument()
 
     if (originalOnline) {
