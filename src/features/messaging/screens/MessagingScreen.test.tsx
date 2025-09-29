@@ -34,6 +34,13 @@ const baseStore = {
     activeConversationId: null,
     pendingMessages: [],
     messagingRealtime: { status: 'connected', sessionId: 'session', since: new Date().toISOString(), presence: {} },
+    matchFeedMeta: null,
+    pendingMatchActions: [],
+    matchNotifications: [],
+    messageNotifications: [],
+    eventDetails: {},
+    pendingEventRegistrations: [],
+    notificationPermission: 'default',
   },
   refreshProfile: vi.fn(),
   saveProfile: vi.fn(),
@@ -49,6 +56,10 @@ const baseStore = {
   retryMessage: vi.fn(),
   setTypingState: vi.fn(),
   setActiveConversation: vi.fn(),
+  acknowledgeMatchNotification: vi.fn(),
+  acknowledgeMessageNotification: vi.fn(),
+  requestNotificationPermission: vi.fn(async () => 'default'),
+  ensureNotificationPermission: vi.fn(),
 }
 
 describe('MessagingScreen', () => {

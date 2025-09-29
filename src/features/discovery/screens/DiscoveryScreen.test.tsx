@@ -20,6 +20,8 @@ const baseStore = {
     matchFeedMeta: null,
     pendingMatchActions: [],
     matchNotifications: [],
+    messageNotifications: [],
+    notificationPermission: 'default',
   },
   refreshProfile: vi.fn(),
   saveProfile: vi.fn(),
@@ -33,6 +35,9 @@ const baseStore = {
   sendMessage: vi.fn(),
   setActiveConversation: vi.fn(),
   acknowledgeMatchNotification: vi.fn(),
+  acknowledgeMessageNotification: vi.fn(),
+  requestNotificationPermission: vi.fn(async () => 'default'),
+  ensureNotificationPermission: vi.fn(),
 }
 
 describe('DiscoveryScreen', () => {

@@ -104,9 +104,13 @@ interface AppState {
   matchFeedMeta: MatchFeedMeta | null
   pendingMatchActions: PendingSwipeAction[]
   matchNotifications: MatchFeedItem[]
+  messageNotifications: Message[]
   eventDetails: Record<string, EventDetails | undefined>
   pendingEventRegistrations: PendingEventRegistration[]
+  notificationPermission: NotificationPermissionState
 }
+
+export type NotificationPermissionState = NotificationPermission | 'unsupported'
 
 const createInitialState = (): AppState => ({
   profile: { status: 'idle', data: null },
@@ -123,8 +127,13 @@ const createInitialState = (): AppState => ({
   matchFeedMeta: null,
   pendingMatchActions: [],
   matchNotifications: [],
+  messageNotifications: [],
   eventDetails: {},
   pendingEventRegistrations: [],
+  notificationPermission:
+    typeof window !== 'undefined' && 'Notification' in window
+      ? Notification.permission
+      : 'unsupported',
 })
 
 type AppAction =
@@ -141,6 +150,8 @@ type AppAction =
   | { type: 'matches/pending/update'; payload: PendingSwipeAction }
   | { type: 'matches/notify'; payload: MatchFeedItem[] }
   | { type: 'matches/notification/ack'; payload: string }
+  | { type: 'messages/notification/add'; payload: Message }
+  | { type: 'messages/notification/remove'; payload: string }
   | { type: 'events/loading'; payload?: { append?: boolean } }
   | { type: 'events/success'; payload: EventListState }
   | { type: 'events/error'; error: string }
@@ -165,6 +176,7 @@ type AppAction =
   | { type: 'activeConversation/set'; payload: string | null }
   | { type: 'presence/update'; payload: PresenceUpdate }
   | { type: 'realtime/session'; payload: MessagingSessionSnapshot }
+  | { type: 'notification/permission'; payload: NotificationPermissionState }
 
 const reducer = (state: AppState, action: AppAction): AppState => {
   switch (action.type) {
@@ -220,6 +232,16 @@ const reducer = (state: AppState, action: AppAction): AppState => {
       return {
         ...state,
         matchNotifications: state.matchNotifications.filter((match) => match.id !== action.payload),
+      }
+    case 'messages/notification/add': {
+      const exists = state.messageNotifications.some((message) => message.id === action.payload.id)
+      if (exists) return state
+      return { ...state, messageNotifications: [...state.messageNotifications, action.payload] }
+    }
+    case 'messages/notification/remove':
+      return {
+        ...state,
+        messageNotifications: state.messageNotifications.filter((message) => message.id !== action.payload),
       }
     case 'events/loading':
       return {
@@ -527,6 +549,11 @@ const reducer = (state: AppState, action: AppAction): AppState => {
           since: action.payload.since,
         },
       }
+    case 'notification/permission':
+      return {
+        ...state,
+        notificationPermission: action.payload,
+      }
     default:
       return state
   }
@@ -550,6 +577,9 @@ interface AppStoreValue {
   setTypingState: (conversationId: string, typing: boolean) => void
   setActiveConversation: (conversationId: string | null) => void
   acknowledgeMatchNotification: (matchId: string) => void
+  acknowledgeMessageNotification: (messageId: string) => void
+  requestNotificationPermission: () => Promise<NotificationPermissionState>
+  ensureNotificationPermission: () => void
 }
 
 const AppStoreContext = createContext<AppStoreValue | undefined>(undefined)
@@ -593,6 +623,8 @@ const hydrateState = (): AppState => {
     base.messages = cachedMessages.value
   }
 
+  base.messageNotifications = []
+
   if (typeof window === 'undefined') {
     return base
   }
@@ -620,8 +652,13 @@ const hydrateState = (): AppState => {
       matchFeedMeta: parsed.matchFeedMeta ?? base.matchFeedMeta,
       pendingMatchActions: parsed.pendingMatchActions ?? base.pendingMatchActions,
       matchNotifications: parsed.matchNotifications ?? base.matchNotifications,
+      messageNotifications: parsed.messageNotifications ?? base.messageNotifications,
       eventDetails: parsed.eventDetails ?? base.eventDetails,
       pendingEventRegistrations: parsed.pendingEventRegistrations ?? base.pendingEventRegistrations,
+      notificationPermission:
+        'Notification' in window
+          ? Notification.permission
+          : parsed.notificationPermission ?? 'unsupported',
     }
     const maybeEvents = parsed.events
     if (maybeEvents && !Array.isArray((maybeEvents as unknown as { data: unknown }).data)) {
@@ -838,29 +875,6 @@ const applyDecisionToMatches = (
 export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { token, user } = useAuth()
   const [state, dispatch] = useReducer(reducer, undefined, hydrateState)
-  const triggerMatchNotifications = useCallback(
-    (matches: MatchFeedItem[]) => {
-      if (matches.length === 0) return
-      dispatch({ type: 'matches/notify', payload: matches })
-      if (typeof window === 'undefined') return
-      if (!('Notification' in window)) return
-      if (Notification.permission !== 'granted') return
-      matches.forEach((match) => {
-        try {
-          new Notification('Nouveau match 🎉', {
-            body: `${match.profile.fullName} est aussi intéressé(e)`,
-            tag: match.id,
-          })
-        } catch (error) {
-          if (import.meta.env.DEV) {
-            console.warn('Unable to display native notification', error)
-          }
-        }
-      })
-    },
-    [dispatch],
-  )
-
   const profileRef = useRef<UserProfile | null>(state.profile.data)
   const matchesRef = useRef<MatchFeedItem[]>(state.matches.data)
 
@@ -879,13 +893,123 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     conversationsRef.current = state.conversations.data
   }, [state.conversations.data])
 
+  useEffect(() => {
+    if (!state.activeConversationId) return
+    state.messageNotifications
+      .filter((notification) => notification.conversationId === state.activeConversationId)
+      .forEach((notification) => {
+        dispatch({ type: 'messages/notification/remove', payload: notification.id })
+      })
+  }, [dispatch, state.activeConversationId, state.messageNotifications])
+
   const pendingMessagesRef = useRef<PendingMessageState[]>(state.pendingMessages)
   useEffect(() => {
     pendingMessagesRef.current = state.pendingMessages
   }, [state.pendingMessages])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!('Notification' in window)) {
+      if (state.notificationPermission !== 'unsupported') {
+        dispatch({ type: 'notification/permission', payload: 'unsupported' })
+      }
+      return
+    }
+    const current = Notification.permission
+    if (current !== state.notificationPermission) {
+      dispatch({ type: 'notification/permission', payload: current })
+    }
+  }, [dispatch, state.notificationPermission])
+
   const realtimeMessagingRef = useRef<RealtimeMessaging | null>(null)
   const isProcessingQueueRef = useRef(false)
+  const permissionPromptCleanupRef = useRef<(() => void) | null>(null)
+
+  const clearScheduledPermissionRequest = useCallback(() => {
+    const cleanup = permissionPromptCleanupRef.current
+    if (cleanup) {
+      permissionPromptCleanupRef.current = null
+      cleanup()
+    }
+  }, [])
+
+  const requestNotificationPermission = useCallback(async (): Promise<NotificationPermissionState> => {
+    clearScheduledPermissionRequest()
+    if (typeof window === 'undefined') {
+      return 'unsupported'
+    }
+    if (!('Notification' in window)) {
+      if (state.notificationPermission !== 'unsupported') {
+        dispatch({ type: 'notification/permission', payload: 'unsupported' })
+      }
+      return 'unsupported'
+    }
+    try {
+      const result = await Notification.requestPermission()
+      dispatch({ type: 'notification/permission', payload: result })
+      return result
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        console.warn('Notification permission request failed', error)
+      }
+      return state.notificationPermission
+    }
+  }, [clearScheduledPermissionRequest, dispatch, state.notificationPermission])
+
+  const ensureNotificationPermission = useCallback(() => {
+    if (state.notificationPermission === 'unsupported') return
+    if (state.notificationPermission === 'denied' || state.notificationPermission === 'granted') return
+    if (typeof window === 'undefined') return
+    if (!('Notification' in window)) {
+      if (state.notificationPermission !== 'unsupported') {
+        dispatch({ type: 'notification/permission', payload: 'unsupported' })
+      }
+      return
+    }
+    if (permissionPromptCleanupRef.current) return
+
+    const interactionEvents: Array<keyof WindowEventMap> = ['click', 'keydown', 'touchend']
+    const handleInteraction = async () => {
+      clearScheduledPermissionRequest()
+      await requestNotificationPermission()
+    }
+
+    interactionEvents.forEach((event) =>
+      window.addEventListener(event, handleInteraction, { once: true } as AddEventListenerOptions),
+    )
+    permissionPromptCleanupRef.current = () => {
+      interactionEvents.forEach((event) => window.removeEventListener(event, handleInteraction))
+    }
+  }, [clearScheduledPermissionRequest, dispatch, requestNotificationPermission, state.notificationPermission])
+
+  const triggerMatchNotifications = useCallback(
+    (matches: MatchFeedItem[]) => {
+      if (matches.length === 0) return
+      dispatch({ type: 'matches/notify', payload: matches })
+      if (typeof window === 'undefined') return
+      if (!('Notification' in window)) return
+      if (state.notificationPermission === 'default') {
+        ensureNotificationPermission()
+        return
+      }
+      if (state.notificationPermission !== 'granted') return
+      matches.forEach((match) => {
+        try {
+          new Notification('Nouveau match 🎉', {
+            body: `${match.profile.fullName} est aussi intéressé(e)`,
+            tag: match.id,
+          })
+        } catch (error) {
+          if (import.meta.env.DEV) {
+            console.warn('Unable to display native notification', error)
+          }
+        }
+      })
+    },
+    [dispatch, ensureNotificationPermission, state.notificationPermission],
+  )
+
+  useEffect(() => () => clearScheduledPermissionRequest(), [clearScheduledPermissionRequest])
 
   useEffect(() => {
     if (state.profile.status === 'success' && state.profile.data) {
@@ -1602,9 +1726,22 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const notifyIncomingMessage = useCallback(
     (message: Message) => {
       if (message.senderId === user?.id) return
+      const isActiveConversation = state.activeConversationId === message.conversationId
+
+      if (!isActiveConversation && state.notificationPermission !== 'granted') {
+        dispatch({ type: 'messages/notification/add', payload: message })
+      }
+
       if (typeof window === 'undefined') return
       if (!('Notification' in window)) return
-      if (Notification.permission !== 'granted') return
+
+      if (state.notificationPermission === 'default') {
+        ensureNotificationPermission()
+        return
+      }
+
+      if (state.notificationPermission !== 'granted') return
+
       const conversation = conversationsRef.current.find((item) => item.id === message.conversationId)
       const sender = conversation?.participants.find((participant) => participant.id === message.senderId)
       try {
@@ -1618,7 +1755,13 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       }
     },
-    [user?.id],
+    [
+      ensureNotificationPermission,
+      dispatch,
+      state.activeConversationId,
+      state.notificationPermission,
+      user?.id,
+    ],
   )
 
   useEffect(() => {
@@ -1669,6 +1812,10 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     dispatch({ type: 'matches/notification/ack', payload: matchId })
   }, [])
 
+  const acknowledgeMessageNotification = useCallback((messageId: string) => {
+    dispatch({ type: 'messages/notification/remove', payload: messageId })
+  }, [])
+
   useEffect(() => {
     profileRef.current = state.profile.data
   }, [state.profile.data])
@@ -1692,6 +1839,9 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setTypingState,
       setActiveConversation,
       acknowledgeMatchNotification,
+      acknowledgeMessageNotification,
+      requestNotificationPermission,
+      ensureNotificationPermission,
     }),
     [
       state,
@@ -1711,6 +1861,9 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setTypingState,
       setActiveConversation,
       acknowledgeMatchNotification,
+      acknowledgeMessageNotification,
+      requestNotificationPermission,
+      ensureNotificationPermission,
     ],
   )
 
@@ -1725,4 +1878,4 @@ export const useAppStore = (): AppStoreValue => {
   return context
 }
 
-export type { AppState, AppStoreValue }
+export type { AppState, AppStoreValue, NotificationPermissionState }

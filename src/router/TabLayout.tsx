@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuth } from '../auth/AuthContext'
 import { useAppStore } from '../store/AppStore'
 import useResponsiveBreakpoint from '../hooks/useResponsiveBreakpoint'
 import { AccessibilityMenu, useAccessibilitySettings } from '../accessibility'
+import useNotificationPermission from '../hooks/useNotificationPermission'
 import './tabLayout.css'
 
 interface TabDefinition {
@@ -23,11 +24,13 @@ const baseTabs: Array<Omit<TabDefinition, 'badge'>> = [
 
 const TabLayout: React.FC = () => {
   const { logout } = useAuth()
-  const { state } = useAppStore()
+  const { state, setActiveConversation, acknowledgeMessageNotification } = useAppStore()
   const location = useLocation()
+  const navigate = useNavigate()
   const { up } = useResponsiveBreakpoint()
   const { screenReaderHints } = useAccessibilitySettings()
   const [announcement, setAnnouncement] = useState('')
+  const { permission: notificationPermission } = useNotificationPermission()
 
   const showLabels = up('md')
 
@@ -66,6 +69,19 @@ const TabLayout: React.FC = () => {
   const activeSegment = location.pathname.split('/')[2] ?? 'profile'
   const activeTab = tabs.find((tab) => activeSegment.startsWith(tab.path)) ?? tabs[0]
 
+  const messageNotification = state.messageNotifications[0]
+  const messageConversation = messageNotification
+    ? state.conversations.data.find((conversation) => conversation.id === messageNotification.conversationId)
+    : undefined
+  const messageSender = messageConversation?.participants.find((participant) => participant.id === messageNotification?.senderId)
+
+  const handleOpenConversation = () => {
+    if (!messageNotification) return
+    setActiveConversation(messageNotification.conversationId)
+    acknowledgeMessageNotification(messageNotification.id)
+    navigate('messaging')
+  }
+
   useEffect(() => {
     if (!screenReaderHints || !activeTab) {
       return
@@ -87,6 +103,33 @@ const TabLayout: React.FC = () => {
       <main className="app-shell__content">
         <Outlet />
       </main>
+      {messageNotification ? (
+        <div className="app-shell__notification" role="alert" aria-live="assertive">
+          <div className="app-shell__notification-content">
+            <p>
+              <strong>{messageSender?.fullName ?? 'Nouveau message'}</strong>
+              {notificationPermission === 'denied'
+                ? ' vous a écrit, mais les notifications sont désactivées.'
+                : ' vous a envoyé un message.'}
+            </p>
+            {messageNotification.content ? (
+              <p className="app-shell__notification-preview">“{messageNotification.content}”</p>
+            ) : null}
+          </div>
+          <div className="app-shell__notification-actions">
+            <button type="button" className="primary" onClick={handleOpenConversation}>
+              Ouvrir la conversation
+            </button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => acknowledgeMessageNotification(messageNotification.id)}
+            >
+              Ignorer
+            </button>
+          </div>
+        </div>
+      ) : null}
       <nav className="app-shell__tabs" aria-label="Navigation principale" role="tablist">
         {tabs.map((tab) => (
           <NavLink
