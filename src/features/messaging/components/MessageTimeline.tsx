@@ -35,7 +35,12 @@ const resolveStatusLabel = (
   return 'Envoyé'
 }
 
-const MessageTimeline: React.FC<MessageTimelineProps> = ({ messages, currentUserId, pendingMessages, onRetry }) => (
+const MessageTimelineComponent: React.FC<MessageTimelineProps> = ({
+  messages,
+  currentUserId,
+  pendingMessages,
+  onRetry,
+}) => (
   <ul className="list" aria-live="polite">
     {messages.map((message) => {
       const isOutgoing = message.senderId === currentUserId
@@ -79,6 +84,15 @@ const MessageTimeline: React.FC<MessageTimelineProps> = ({ messages, currentUser
       )
     })}
   </ul>
+)
+
+const MessageTimeline = React.memo(
+  MessageTimelineComponent,
+  (prev, next) =>
+    prev.messages === next.messages &&
+    prev.currentUserId === next.currentUserId &&
+    prev.pendingMessages === next.pendingMessages &&
+    prev.onRetry === next.onRetry,
 )
 
 export default MessageTimeline

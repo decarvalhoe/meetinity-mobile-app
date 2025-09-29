@@ -8,7 +8,11 @@ interface ConversationListProps {
   onSelectConversation?: (conversationId: string) => void
 }
 
-const ConversationList: React.FC<ConversationListProps> = ({ conversations, activeConversationId, onSelectConversation }) => (
+const ConversationListComponent: React.FC<ConversationListProps> = ({
+  conversations,
+  activeConversationId,
+  onSelectConversation,
+}) => (
   <ul className="list">
     {conversations.map((conversation) => {
       const lastMessage = conversation.lastMessage
@@ -33,6 +37,21 @@ const ConversationList: React.FC<ConversationListProps> = ({ conversations, acti
       )
     })}
   </ul>
+)
+
+const ConversationList = React.memo(
+  ConversationListComponent,
+  (prev, next) => {
+    if (prev.activeConversationId !== next.activeConversationId) return false
+    if (prev.onSelectConversation !== next.onSelectConversation) return false
+    if (prev.conversations.length !== next.conversations.length) return false
+    for (let index = 0; index < prev.conversations.length; index += 1) {
+      if (prev.conversations[index] !== next.conversations[index]) {
+        return false
+      }
+    }
+    return true
+  },
 )
 
 export default ConversationList

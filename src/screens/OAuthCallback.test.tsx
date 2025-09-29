@@ -33,7 +33,11 @@ describe('OAuthCallback screen', () => {
   })
 
   it('completes the OAuth callback and redirects to the profile page', async () => {
-    mockedAuthService.handleCallback.mockResolvedValue('token123')
+    mockedAuthService.handleCallback.mockResolvedValue({
+      accessToken: 'token123',
+      refreshToken: 'refresh123',
+      expiresIn: 3600,
+    })
     const setToken = vi.fn().mockResolvedValue(undefined)
 
     render(
@@ -50,13 +54,18 @@ describe('OAuthCallback screen', () => {
 
     expect(screen.getByText(/Connexion en cours/i)).toBeInTheDocument()
 
-    await waitFor(() => expect(setToken).toHaveBeenCalledWith('token123'))
+    await waitFor(() =>
+      expect(setToken).toHaveBeenCalledWith(
+        'token123',
+        expect.objectContaining({ refreshToken: 'refresh123', expiresIn: 3600 }),
+      ),
+    )
     await waitFor(() => expect(screen.getByText('Profile')).toBeInTheDocument())
   })
 
   it('uses the token provided in the query string when available', async () => {
     mockedAuthService.handleCallback.mockImplementation((provider, code, state, tokenInQuery) =>
-      Promise.resolve(tokenInQuery ?? 'server-token')
+      Promise.resolve({ accessToken: tokenInQuery ?? 'server-token' }),
     )
     const setToken = vi.fn().mockResolvedValue(undefined)
 
@@ -73,7 +82,12 @@ describe('OAuthCallback screen', () => {
     )
 
     await waitFor(() => expect(mockedAuthService.handleCallback).toHaveBeenCalledWith('linkedin', null, null, 'direct-token'))
-    await waitFor(() => expect(setToken).toHaveBeenCalledWith('direct-token'))
+    await waitFor(() =>
+      expect(setToken).toHaveBeenCalledWith(
+        'direct-token',
+        expect.objectContaining({ refreshToken: undefined, expiresIn: undefined }),
+      ),
+    )
   })
 
   it('displays an error when required parameters are missing', async () => {

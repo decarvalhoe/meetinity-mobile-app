@@ -1,32 +1,20 @@
-import http from './http'
-import type { EventDetails, EventListFilters, EventListResponse } from '../features/events/types'
-
-const withToken = (token: string) => ({
-  headers: {
-    Authorization: `Bearer ${token}`,
-  },
-})
+import apiClient from './apiClient'
+import type { EventDetails, EventListFilters, EventListResponse, EventSummary } from '../features/events/types'
 
 const eventsService = {
   async list(
-    token: string,
     params: (EventListFilters & { page?: number; pageSize?: number }) | undefined = undefined,
   ): Promise<EventListResponse> {
-    const response = await http.get<EventListResponse>('/events', {
-      ...withToken(token),
-      params,
-    })
-    return response.data
+    return apiClient.get<EventListResponse>('/events', { params })
   },
-  async details(token: string, eventId: string): Promise<EventDetails> {
-    const response = await http.get<EventDetails>(`/events/${eventId}`, withToken(token))
-    return response.data
+  async details(eventId: string): Promise<EventDetails> {
+    return apiClient.get<EventDetails>(`/events/${eventId}`)
   },
-  async join(token: string, eventId: string): Promise<void> {
-    await http.post(`/events/${eventId}/join`, undefined, withToken(token))
+  async join(eventId: string): Promise<void> {
+    await apiClient.post(`/events/${eventId}/join`)
   },
-  async leave(token: string, eventId: string): Promise<void> {
-    await http.post(`/events/${eventId}/leave`, undefined, withToken(token))
+  async leave(eventId: string): Promise<void> {
+    await apiClient.post(`/events/${eventId}/leave`)
   },
 }
 

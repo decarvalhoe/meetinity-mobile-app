@@ -46,7 +46,11 @@ vi.mock('../../../services/messagingService', () => ({
   default: mockMessagingService,
 }))
 
-const mockRealtimeClient = vi.hoisted(() => ({
+const mockRealtimeMessaging = vi.hoisted(() => ({
+  start: vi.fn(),
+  stop: vi.fn(),
+  announcePresence: vi.fn(),
+  markConversationRead: vi.fn(),
   subscribeToMessages: vi.fn(() => vi.fn()),
   subscribeToMatches: vi.fn((handler: (matches: MatchFeedItem[]) => void) => {
     matchHandlers.push(handler)
@@ -54,8 +58,13 @@ const mockRealtimeClient = vi.hoisted(() => ({
   }),
   disconnect: vi.fn(),
 }))
-vi.mock('../../../services/realtime', () => ({
-  createRealtimeClient: vi.fn(() => mockRealtimeClient),
+vi.mock('../../../services/realtimeMessaging', () => ({
+  createRealtimeMessaging: vi.fn((config: any) => {
+    if (config?.onMatches) {
+      matchHandlers.push(config.onMatches)
+    }
+    return mockRealtimeMessaging
+  }),
 }))
 
 const mockMatchingService = vi.hoisted(() => ({
@@ -105,10 +114,18 @@ describe('Swipe flow integration', () => {
     })
     mockMatchingService.syncLikes.mockResolvedValue({ processed: ['match-1'], failed: [] })
     mockProfileService.getProfile.mockResolvedValue({ id: 'user-1' })
-    mockEventsService.list.mockResolvedValue([])
+    mockEventsService.list.mockResolvedValue({
+      items: [],
+      page: 1,
+      pageSize: 20,
+      total: 0,
+      hasMore: false,
+      filters: {},
+    })
     mockMessagingService.listConversations.mockResolvedValue([])
     mockMessagingService.listMessages.mockResolvedValue([])
     matchHandlers.length = 0
+    localStorage.clear()
   })
 
   afterEach(() => {
@@ -119,6 +136,7 @@ describe('Swipe flow integration', () => {
   it('sends likes to the API and updates the UI', async () => {
     renderDiscovery()
 
+    await waitFor(() => expect(mockMatchingService.getFeed).toHaveBeenCalled())
     await screen.findByText('Jane Doe')
 
     const likeButtons = screen.getAllByRole('button', { name: 'Entrer en contact' })
@@ -130,7 +148,7 @@ describe('Swipe flow integration', () => {
       expect(mockMatchingService.syncLikes).toHaveBeenCalled()
     })
 
-    const payload = mockMatchingService.syncLikes.mock.calls[0][1]
+    const payload = mockMatchingService.syncLikes.mock.calls[0][0]
     expect(payload.likes[0]).toMatchObject({ id: 'match-1', decision: 'like' })
   })
 
@@ -138,6 +156,7 @@ describe('Swipe flow integration', () => {
     mockMatchingService.syncLikes.mockRejectedValue(new Error('Network Error'))
     renderDiscovery()
 
+    await waitFor(() => expect(mockMatchingService.getFeed).toHaveBeenCalled())
     await screen.findByText('Jane Doe')
 
     const likeButtons = screen.getAllByRole('button', { name: 'Entrer en contact' })
@@ -145,13 +164,15 @@ describe('Swipe flow integration', () => {
       fireEvent.click(likeButtons[0])
     })
 
-    await screen.findByText(/seront synchronisées/i)
+    await screen.findByText(/action\(s\)\s+en attente de synchronisation/i)
   })
 
   it('displays a match dialog when realtime pushes a match', async () => {
     renderDiscovery()
 
+    await waitFor(() => expect(mockMatchingService.getFeed).toHaveBeenCalled())
     await screen.findByText('Jane Doe')
+    await waitFor(() => expect(matchHandlers.length).toBeGreaterThan(0))
 
     await act(async () => {
       matchHandlers.forEach((handler) =>
