@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import type {
   AvatarCropSettings,
   ProfileDraft,
@@ -9,6 +9,7 @@ import type {
   UserProfile,
 } from '../types'
 import type { PhotoUploadState } from '../services/photoUpload'
+import { BIO_MAX_LENGTH, validateProfileDraft } from '../validation'
 import '../../shared.css'
 
 type ProfileFormFieldKey = Exclude<keyof ProfileUpdatePayload, 'preferences' | 'avatarUpload' | 'avatarUrl'>
@@ -50,6 +51,8 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({
   busy,
   error,
 }) => {
+  const [showErrors, setShowErrors] = useState(false)
+  const validation = useMemo(() => validateProfileDraft(draft), [draft])
   const crop = useMemo<AvatarCropSettings>(
     () => ({
       x: avatarState.draft?.crop?.x ?? 0,
@@ -62,8 +65,19 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({
     [avatarState.draft?.crop?.height, avatarState.draft?.crop?.rotation, avatarState.draft?.crop?.scale, avatarState.draft?.crop?.width, avatarState.draft?.crop?.x, avatarState.draft?.crop?.y],
   )
 
+  useEffect(() => {
+    if (showErrors && validation.isValid) {
+      setShowErrors(false)
+    }
+  }, [showErrors, validation.isValid])
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
+    if (!validation.isValid) {
+      setShowErrors(true)
+      return
+    }
+    setShowErrors(false)
     const preferencesPayload: ProfileUpdatePayload['preferences'] = {
       discoveryRadiusKm: draft.preferences.discoveryRadiusKm,
       industries: draft.preferences.industries ?? [],
@@ -118,6 +132,21 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({
   const showCurrentAvatar = avatarState.previewUrl ?? profile?.avatarUrl
   const experiences = draft.profile.experiences ?? []
   const links = draft.profile.links ?? []
+  const hasInterestsError = showErrors && Boolean(validation.errors.interests)
+  const headlineError = showErrors ? validation.errors.headline : undefined
+  const fullNameError = showErrors ? validation.errors.fullName : undefined
+  const bioLength = draft.profile.bio?.length ?? 0
+  const showBioError = Boolean(validation.errors.bio) && (showErrors || bioLength > BIO_MAX_LENGTH)
+  const bioError = showBioError ? validation.errors.bio : undefined
+  const radiusHasValue = draft.preferences.discoveryRadiusKm != null
+  const showRadiusError = Boolean(validation.errors.discoveryRadiusKm) && (showErrors || radiusHasValue)
+  const radiusError = showRadiusError ? validation.errors.discoveryRadiusKm : undefined
+  const linkErrors = validation.errors.links ?? []
+
+  const handleCancel = () => {
+    setShowErrors(false)
+    onCancel()
+  }
 
   const sanitizeExperiencePatch = (patch: Partial<ProfileExperience>): Partial<ProfileExperience> => {
     const normalized: Partial<ProfileExperience> = { ...patch }
@@ -309,7 +338,14 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({
           id="fullName"
           value={draft.profile.fullName ?? ''}
           onChange={(event) => onFieldChange('fullName', event.target.value)}
+          aria-invalid={fullNameError ? true : undefined}
+          aria-describedby={fullNameError ? 'fullName-error' : undefined}
         />
+        {fullNameError && (
+          <p className="error-text" id="fullName-error">
+            {fullNameError}
+          </p>
+        )}
       </div>
       <div className="form-group">
         <label htmlFor="headline">Titre</label>
@@ -317,7 +353,14 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({
           id="headline"
           value={draft.profile.headline ?? ''}
           onChange={(event) => onFieldChange('headline', event.target.value)}
+          aria-invalid={headlineError ? true : undefined}
+          aria-describedby={headlineError ? 'headline-error' : undefined}
         />
+        {headlineError && (
+          <p className="error-text" id="headline-error">
+            {headlineError}
+          </p>
+        )}
       </div>
       <div className="form-group">
         <label htmlFor="bio">Bio</label>
@@ -326,7 +369,14 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({
           rows={3}
           value={draft.profile.bio ?? ''}
           onChange={(event) => onFieldChange('bio', event.target.value)}
+          aria-invalid={bioError ? true : undefined}
+          aria-describedby={bioError ? 'bio-error' : undefined}
         />
+        {bioError && (
+          <p className="error-text" id="bio-error">
+            {bioError}
+          </p>
+        )}
       </div>
       <div className="form-group">
         <label htmlFor="interests">Intérêts (séparés par des virgules)</label>
@@ -334,7 +384,14 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({
           id="interests"
           value={(draft.profile.interests ?? []).join(', ')}
           onChange={(event) => handleProfileInterests(event.target.value)}
+          aria-invalid={hasInterestsError ? true : undefined}
+          aria-describedby={hasInterestsError ? 'interests-error' : undefined}
         />
+        {hasInterestsError && (
+          <p className="error-text" id="interests-error">
+            {validation.errors.interests}
+          </p>
+        )}
       </div>
       <div className="form-grid">
         <div className="form-group">
@@ -391,8 +448,15 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({
               min={1}
               value={draft.preferences.discoveryRadiusKm ?? ''}
               onChange={(event) => handleRadius(event.target.value)}
+              aria-invalid={radiusError ? true : undefined}
+              aria-describedby={radiusError ? 'radius-error' : undefined}
             />
           </label>
+          {radiusError && (
+            <p className="error-text" id="radius-error">
+              {radiusError}
+            </p>
+          )}
           <label className="form-group" htmlFor="pref-industries">
             Industries ciblées
             <input
@@ -482,24 +546,48 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({
       <fieldset className="form-group">
         <legend>Liens publics</legend>
         {links.length === 0 && <p className="help-text">Partagez vos profils sociaux ou portfolio.</p>}
-        {links.map((link, index) => (
-          <div key={`link-${index}`} className="form-grid">
-            <label className="form-group">
-              <span>Libellé</span>
-              <input
-                value={link.label ?? ''}
-                onChange={(event) => handleLinkChange(index, { label: event.target.value })}
-                disabled={busy}
-              />
-            </label>
-            <label className="form-group">
-              <span>URL</span>
-              <input
-                value={link.url ?? ''}
-                onChange={(event) => handleLinkChange(index, { url: event.target.value })}
-                disabled={busy}
-              />
-            </label>
+        {links.map((link, index) => {
+          const linkError = linkErrors[index]
+          const trimmedLabel = link.label?.trim() ?? ''
+          const trimmedUrl = link.url?.trim() ?? ''
+          const linkHasContent = trimmedLabel.length > 0 || trimmedUrl.length > 0
+          const displayErrors = linkError && (showErrors || linkHasContent)
+          const showLabelError = Boolean(displayErrors && linkError?.label)
+          const showUrlError = Boolean(displayErrors && linkError?.url)
+          const labelErrorId = showLabelError ? `link-${index}-label-error` : undefined
+          const urlErrorId = showUrlError ? `link-${index}-url-error` : undefined
+          return (
+            <div key={`link-${index}`} className="form-grid">
+              <label className="form-group">
+                <span>Libellé</span>
+                <input
+                  value={link.label ?? ''}
+                  onChange={(event) => handleLinkChange(index, { label: event.target.value })}
+                  disabled={busy}
+                  aria-invalid={showLabelError ? true : undefined}
+                  aria-describedby={labelErrorId}
+                />
+                {showLabelError && (
+                  <p className="error-text" id={labelErrorId}>
+                    {linkError?.label}
+                  </p>
+                )}
+              </label>
+              <label className="form-group">
+                <span>URL</span>
+                <input
+                  value={link.url ?? ''}
+                  onChange={(event) => handleLinkChange(index, { url: event.target.value })}
+                  disabled={busy}
+                  aria-invalid={showUrlError ? true : undefined}
+                  aria-describedby={urlErrorId}
+                />
+                {showUrlError && (
+                  <p className="error-text" id={urlErrorId}>
+                    {linkError?.url}
+                  </p>
+                )}
+              </label>
             <div className="card__footer card__footer--actions">
               <button
                 type="button"
@@ -510,8 +598,9 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({
                 Supprimer ce lien
               </button>
             </div>
-          </div>
-        ))}
+            </div>
+          )
+        })}
         <button type="button" className="secondary" onClick={handleLinkAdd} disabled={busy}>
           Ajouter un lien
         </button>
@@ -522,7 +611,7 @@ const ProfileEditor: React.FC<ProfileEditorProps> = ({
         </p>
       )}
       <div className="card__footer card__footer--actions">
-        <button type="button" className="secondary" onClick={onCancel} disabled={busy}>
+        <button type="button" className="secondary" onClick={handleCancel} disabled={busy}>
           Annuler
         </button>
         <button type="submit" className="primary" disabled={busy}>
