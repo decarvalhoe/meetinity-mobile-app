@@ -3,13 +3,16 @@ import React from 'react'
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest'
 import DiscoveryScreen from '../screens/DiscoveryScreen'
 import { AppStoreProvider } from '../../../store/AppStore'
+import type { MatchFeedItem } from '../types'
 
-const matchHandlers: Array<(matches: any[]) => void> = []
+const matchHandlers: Array<(matches: MatchFeedItem[]) => void> = []
 
 vi.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   motion: {
-    div: ({ children, ...rest }: any) => <div {...rest}>{children}</div>,
+    div: ({ children, ...rest }: React.PropsWithChildren<React.HTMLAttributes<HTMLDivElement>>) => (
+      <div {...rest}>{children}</div>
+    ),
   },
 }))
 
@@ -48,6 +51,12 @@ const mockRealtimeMessaging = vi.hoisted(() => ({
   stop: vi.fn(),
   announcePresence: vi.fn(),
   markConversationRead: vi.fn(),
+  subscribeToMessages: vi.fn(() => vi.fn()),
+  subscribeToMatches: vi.fn((handler: (matches: MatchFeedItem[]) => void) => {
+    matchHandlers.push(handler)
+    return () => {}
+  }),
+  disconnect: vi.fn(),
 }))
 vi.mock('../../../services/realtimeMessaging', () => ({
   createRealtimeMessaging: vi.fn((config: any) => {

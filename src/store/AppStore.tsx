@@ -80,7 +80,7 @@ interface MessagingRealtimeState {
   presence: Record<string, PresenceStateEntry>
 }
 
-interface PendingMessageState extends QueuedMessage {}
+type PendingMessageState = QueuedMessage
 
 interface PendingEventRegistration {
   id: string
@@ -1679,3 +1679,5 @@ export const useAppStore = (): AppStoreValue => {
   }
   return context
 }
+
+export type { AppState, AppStoreValue }

@@ -3,6 +3,13 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useAppStore } from '../../../store/AppStore'
 import type { EventDetails, EventSummary } from '../types'
 import '../../shared.css'
+import {
+  ErrorState,
+  LoadingState,
+  OfflinePlaceholder,
+  SkeletonBlock,
+  useOnlineStatus,
+} from '../../shared'
 
 const createFallbackDetail = (summary: EventSummary): EventDetails => ({
   ...summary,
@@ -18,6 +25,7 @@ const EventDetailScreen: React.FC = () => {
   const { eventId } = useParams<{ eventId: string }>()
   const navigate = useNavigate()
   const { state, loadEventDetails, toggleEventRegistration } = useAppStore()
+  const isOnline = useOnlineStatus()
   const [event, setEvent] = useState<EventDetails | undefined>(undefined)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | undefined>(undefined)
@@ -102,16 +110,42 @@ const EventDetailScreen: React.FC = () => {
       <button type="button" className="secondary" onClick={() => navigate(-1)}>
         Retour
       </button>
-      {isLoading && <p className="loading">Chargement des détails…</p>}
+
+      {!isOnline && !event && (
+        <OfflinePlaceholder
+          description="Les détails complets seront disponibles une fois reconnecté."
+          onRetry={() => (eventId ? void loadEventDetails(eventId, { force: true }) : undefined)}
+        />
+      )}
+
+      {isLoading && !event && (
+        <LoadingState
+          title="Chargement des détails"
+          description="Nous récupérons les informations de l'événement."
+          skeleton={
+            <div className="skeleton-card">
+              <div className="skeleton-card__header">
+                <div className="skeleton-group">
+                  <SkeletonBlock height={20} width="70%" />
+                  <SkeletonBlock height={14} width="45%" />
+                </div>
+                <SkeletonBlock height={24} width={120} />
+              </div>
+              <div className="skeleton-card__body">
+                <SkeletonBlock height={12} />
+                <SkeletonBlock height={12} width="90%" />
+                <SkeletonBlock height={12} width="75%" />
+              </div>
+            </div>
+          }
+        />
+      )}
+
       {error && !isLoading && (
-        <div className="error-state" role="alert">
-          {error}
-          <div>
-            <button type="button" onClick={() => (eventId ? void loadEventDetails(eventId, { force: true }) : undefined)}>
-              Réessayer
-            </button>
-          </div>
-        </div>
+        <ErrorState
+          description={error}
+          onRetry={() => (eventId ? void loadEventDetails(eventId, { force: true }) : undefined)}
+        />
       )}
       {!isLoading && !error && event && (
         <article className="card event-detail__card">
@@ -187,12 +221,12 @@ const EventDetailScreen: React.FC = () => {
                 : "S'inscrire"}
             </button>
             {pendingAction?.error && (
-              <p className="error-state" role="status">
+              <p className="state state--inline state--error" role="status">
                 Action en attente ({pendingAction.error})
               </p>
             )}
           </footer>
-          {statusMessage && <p className="loading">{statusMessage}</p>}
+          {statusMessage && <p className="notice" role="status">{statusMessage}</p>}
         </article>
       )}
     </section>

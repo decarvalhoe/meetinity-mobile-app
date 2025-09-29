@@ -13,6 +13,19 @@ const EventDetailScreen = React.lazy(() => import('../features/events/screens/Ev
 const MyEventsScreen = React.lazy(() => import('../features/events/screens/MyEventsScreen'))
 const MessagingScreen = React.lazy(() => import('../features/messaging/screens/MessagingScreen'))
 
+/**
+ * Définition centralisée des transitions entre les modules applicatifs.
+ *
+ * - Utilisateur non authentifié → `/login` puis `/app/...` après connexion (AuthProvider).
+ * - Module principal `/app` protégé par `ProtectedRoute`.
+ * - Entrée par défaut : `/app/profile` (profil) pour garantir l'initialisation du store utilisateur.
+ * - Navigation imbriquée :
+ *   - `/app/events` → liste → `/app/events/:eventId` pour le détail.
+ *   - `/app/events/mine` pour les événements inscrits.
+ *   - `/app/messaging` gère les conversations ↔ chat via l'état global.
+ * - Routes de repli : toute URL inconnue redirige vers `/app/profile`.
+ */
+
 const AppRouter: React.FC = () => (
   <BrowserRouter>
     <Suspense fallback={<div className="loading">Chargement…</div>}>

@@ -54,7 +54,9 @@ const MessageComposer: React.FC<MessageComposerProps> = ({ onSend, disabled, pen
         })
         return []
       })
-      inputRef.current?.value && (inputRef.current.value = '')
+      if (inputRef.current) {
+        inputRef.current.value = ''
+      }
     } catch (err) {
       setError((err as Error).message)
     } finally {
