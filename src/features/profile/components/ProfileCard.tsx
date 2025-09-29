@@ -25,7 +25,12 @@ const ProfileCard: React.FC<ProfileCardProps> = ({ profile, preferences, onEdit 
         )}
         <div>
           <h2>{profile.fullName}</h2>
-          <p className="card__subtitle">{profile.headline}</p>
+          {profile.headline && <p className="card__subtitle">{profile.headline}</p>}
+          {(profile.position || profile.company) && (
+            <p className="card__subtitle">
+              {[profile.position, profile.company].filter(Boolean).join(' • ')}
+            </p>
+          )}
         </div>
         {onEdit && (
           <button type="button" className="card__action" onClick={onEdit}>
@@ -43,6 +48,16 @@ const ProfileCard: React.FC<ProfileCardProps> = ({ profile, preferences, onEdit 
             ))}
           </ul>
         </div>
+        {profile.skills && profile.skills.length > 0 && (
+          <div>
+            <strong>Compétences</strong>
+            <ul className="pill-list">
+              {profile.skills.map((skill) => (
+                <li key={skill}>{skill}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         {profile.location && (
           <div>
             <strong>Localisation</strong>
@@ -53,6 +68,20 @@ const ProfileCard: React.FC<ProfileCardProps> = ({ profile, preferences, onEdit 
           <div>
             <strong>Disponibilités</strong>
             <p>{profile.availability}</p>
+          </div>
+        )}
+        {profile.links && profile.links.length > 0 && (
+          <div>
+            <strong>Liens</strong>
+            <ul className="card__links">
+              {profile.links.map((link) => (
+                <li key={link.url}>
+                  <a href={link.url} target="_blank" rel="noreferrer">
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
         {resolvedPreferences && (

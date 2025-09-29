@@ -1,8 +1,14 @@
+import type { ProfileLink } from '../profile/types'
+
 export interface Participant {
   id: string
   fullName: string
   avatarUrl?: string
   headline?: string
+  company?: string
+  position?: string
+  skills?: string[]
+  links?: ProfileLink[]
 }
 
 export interface Attachment {

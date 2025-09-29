@@ -713,7 +713,15 @@ const normalizeFeedItems = (
   items: MatchFeedItem[],
   source: MatchMetadata['source'],
   fallbackSyncedAt?: string,
-): MatchFeedItem[] => items.map((item) => ensureMetadata(item, source, fallbackSyncedAt))
+): MatchFeedItem[] =>
+  items.map((item) => {
+    const normalized = ensureMetadata(item, source, fallbackSyncedAt)
+    return {
+      ...normalized,
+      profile: normalizeUserProfile(normalized.profile),
+      sharedInterests: normalized.sharedInterests ?? [],
+    }
+  })
 
 const applyStatusSnapshot = (items: MatchFeedItem[], snapshot?: MatchStatusSnapshot): MatchFeedItem[] => {
   if (!snapshot) return items
@@ -756,6 +764,8 @@ const mergeMatchItems = (current: MatchFeedItem[], incoming: MatchFeedItem[]): M
     return {
       ...item,
       ...update,
+      profile: mergeUserProfile(item.profile, update.profile),
+      sharedInterests: update.sharedInterests ?? item.sharedInterests ?? [],
       metadata: { ...item.metadata, ...update.metadata },
     }
   })
@@ -839,6 +849,33 @@ const mergeProfileUpdate = (profile: UserProfile, update: ProfileUpdatePayload):
     }
   }
   return next
+}
+
+const normalizeUserProfile = (profile: UserProfile): UserProfile => ({
+  ...profile,
+  interests: profile.interests ?? [],
+  skills: profile.skills ?? [],
+  links: profile.links ?? [],
+})
+
+const mergeUserProfile = (current: UserProfile, incoming: UserProfile): UserProfile => {
+  const merged: UserProfile = {
+    ...current,
+    ...incoming,
+  }
+  if (incoming.skills === undefined) {
+    merged.skills = current.skills
+  }
+  if (incoming.links === undefined) {
+    merged.links = current.links
+  }
+  if (incoming.company === undefined) {
+    merged.company = current.company
+  }
+  if (incoming.position === undefined) {
+    merged.position = current.position
+  }
+  return normalizeUserProfile(merged)
 }
 
 const serializeFilters = (filters: EventListFilters): string => {

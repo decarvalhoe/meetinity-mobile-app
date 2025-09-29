@@ -102,6 +102,25 @@ section h1 {
   font-weight: var(--font-weight-medium);
 }
 
+.card__links {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-xs) 0 0;
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+.card__links a {
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: var(--font-weight-medium);
+}
+
+.card__links a:hover,
+.card__links a:focus {
+  text-decoration: underline;
+}
+
 .tag {
   background: rgba(108, 92, 231, 0.12);
   color: var(--color-primary);
