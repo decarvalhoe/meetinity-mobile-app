@@ -1,0 +1,94 @@
+<svg width="960" height="600" viewBox="0 0 960 600" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="960" height="600" rx="32" fill="#f8fafc"/>
+  <text x="60" y="68" fill="#111827" font-family="'Inter', sans-serif" font-size="28" font-weight="600">
+    Stories Storybook — Composants clés
+  </text>
+  <!-- ProfileCard -->
+  <g transform="translate(40 96)">
+    <rect width="280" height="180" rx="20" fill="#ffffff" stroke="#e5e7eb" stroke-width="2"/>
+    <circle cx="60" cy="60" r="32" fill="#6c5ce7"/>
+    <text x="32" y="68" fill="#ffffff" font-family="'Inter', sans-serif" font-size="20" font-weight="600">CD</text>
+    <rect x="110" y="40" width="140" height="16" rx="8" fill="#e5e7eb"/>
+    <rect x="110" y="62" width="120" height="12" rx="6" fill="#f1f5f9"/>
+    <rect x="32" y="108" width="216" height="12" rx="6" fill="#ede9fe"/>
+    <rect x="32" y="128" width="184" height="12" rx="6" fill="#ede9fe"/>
+    <rect x="32" y="148" width="120" height="12" rx="6" fill="#ede9fe"/>
+    <text x="40" y="176" fill="#6b7280" font-family="'Inter', sans-serif" font-size="12">
+      Profil complet &amp; tags d’intérêts
+    </text>
+    <text x="0" y="-16" fill="#111827" font-family="'Inter', sans-serif" font-size="16" font-weight="600">
+      ProfileCard
+    </text>
+  </g>
+  <!-- ProfileEditor -->
+  <g transform="translate(360 96)">
+    <rect width="520" height="180" rx="20" fill="#ffffff" stroke="#e5e7eb" stroke-width="2"/>
+    <rect x="32" y="32" width="220" height="18" rx="9" fill="#6c5ce7" opacity="0.12"/>
+    <rect x="32" y="60" width="456" height="14" rx="7" fill="#f1f5f9"/>
+    <rect x="32" y="84" width="456" height="14" rx="7" fill="#f1f5f9"/>
+    <rect x="32" y="108" width="456" height="14" rx="7" fill="#f1f5f9"/>
+    <rect x="32" y="132" width="168" height="14" rx="7" fill="#ede9fe"/>
+    <rect x="212" y="132" width="168" height="14" rx="7" fill="#ede9fe"/>
+    <rect x="392" y="132" width="96" height="14" rx="7" fill="#ede9fe"/>
+    <rect x="32" y="156" width="128" height="14" rx="7" fill="#6c5ce7"/>
+    <rect x="172" y="156" width="96" height="14" rx="7" fill="#f59e0b"/>
+    <text x="32" y="176" fill="#6b7280" font-family="'Inter', sans-serif" font-size="12">
+      Formulaire et actions sauvegarde
+    </text>
+    <text x="0" y="-16" fill="#111827" font-family="'Inter', sans-serif" font-size="16" font-weight="600">
+      ProfileEditor
+    </text>
+  </g>
+  <!-- MatchCard -->
+  <g transform="translate(40 320)">
+    <rect width="280" height="200" rx="20" fill="#ffffff" stroke="#e5e7eb" stroke-width="2"/>
+    <rect x="28" y="28" width="224" height="16" rx="8" fill="#e5e7eb"/>
+    <rect x="28" y="52" width="160" height="12" rx="6" fill="#f1f5f9"/>
+    <rect x="28" y="76" width="220" height="12" rx="6" fill="#f1f5f9"/>
+    <rect x="28" y="110" width="180" height="12" rx="6" fill="#ede9fe"/>
+    <rect x="28" y="132" width="150" height="12" rx="6" fill="#ede9fe"/>
+    <rect x="28" y="154" width="100" height="12" rx="6" fill="#ede9fe"/>
+    <rect x="28" y="176" width="96" height="16" rx="8" fill="#c7d2fe"/>
+    <rect x="140" y="176" width="112" height="16" rx="8" fill="#6c5ce7"/>
+    <text x="40" y="216" fill="#6b7280" font-family="'Inter', sans-serif" font-size="12">
+      Actions Passer / Entrer en contact
+    </text>
+    <text x="0" y="-16" fill="#111827" font-family="'Inter', sans-serif" font-size="16" font-weight="600">
+      MatchCard
+    </text>
+  </g>
+  <!-- EventCard -->
+  <g transform="translate(360 320)">
+    <rect width="260" height="200" rx="20" fill="#ffffff" stroke="#e5e7eb" stroke-width="2"/>
+    <rect x="28" y="28" width="204" height="16" rx="8" fill="#e5e7eb"/>
+    <rect x="28" y="52" width="140" height="12" rx="6" fill="#f1f5f9"/>
+    <rect x="28" y="76" width="204" height="12" rx="6" fill="#f1f5f9"/>
+    <rect x="28" y="100" width="204" height="12" rx="6" fill="#f1f5f9"/>
+    <rect x="28" y="124" width="120" height="12" rx="6" fill="#ede9fe"/>
+    <rect x="28" y="156" width="96" height="16" rx="8" fill="#6c5ce7"/>
+    <rect x="140" y="156" width="92" height="16" rx="8" fill="#cbd5f5"/>
+    <text x="36" y="216" fill="#6b7280" font-family="'Inter', sans-serif" font-size="12">
+      Inscription / détails
+    </text>
+    <text x="0" y="-16" fill="#111827" font-family="'Inter', sans-serif" font-size="16" font-weight="600">
+      EventCard
+    </text>
+  </g>
+  <!-- MessageTimeline -->
+  <g transform="translate(660 320)">
+    <rect width="260" height="200" rx="20" fill="#ffffff" stroke="#e5e7eb" stroke-width="2"/>
+    <rect x="36" y="32" width="160" height="14" rx="7" fill="#6c5ce7" opacity="0.12"/>
+    <rect x="36" y="56" width="180" height="12" rx="6" fill="#e5e7eb"/>
+    <rect x="36" y="78" width="180" height="12" rx="6" fill="#f1f5f9"/>
+    <rect x="36" y="100" width="180" height="12" rx="6" fill="#e5e7eb"/>
+    <rect x="36" y="122" width="120" height="12" rx="6" fill="#f1f5f9"/>
+    <rect x="36" y="146" width="96" height="10" rx="5" fill="#d1d5db"/>
+    <rect x="36" y="166" width="140" height="10" rx="5" fill="#d1d5db"/>
+    <text x="28" y="216" fill="#6b7280" font-family="'Inter', sans-serif" font-size="12">
+      Statuts envoyés / livrés / lus
+    </text>
+    <text x="0" y="-16" fill="#111827" font-family="'Inter', sans-serif" font-size="16" font-weight="600">
+      MessageTimeline
+    </text>
+  </g>
+</svg>
