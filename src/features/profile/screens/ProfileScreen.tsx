@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { Navigate } from 'react-router-dom'
 import ProfileCard from '../components/ProfileCard'
 import ProfileEditor from '../components/ProfileEditor'
 import { useAppStore } from '../../../store/AppStore'
@@ -105,6 +106,10 @@ const ProfileScreen: React.FC = () => {
         }
       />
     )
+  }
+
+  if (!profile && state.profile.status === 'success') {
+    return <Navigate to="/app/profile/create" replace />
   }
 
   if (state.profile.status === 'error') {

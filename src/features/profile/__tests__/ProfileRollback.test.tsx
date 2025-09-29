@@ -7,6 +7,7 @@ import type { UserProfile } from '../types'
 
 const getProfileMock = vi.fn()
 const updateProfileMock = vi.fn()
+const createProfileMock = vi.fn()
 
 vi.mock('../../../auth/AuthContext', () => ({
   useAuth: () => ({
@@ -24,6 +25,7 @@ vi.mock('../../../services/profileService', () => ({
   default: {
     getProfile: (...args: unknown[]) => getProfileMock(...args),
     updateProfile: (...args: unknown[]) => updateProfileMock(...args),
+    createProfile: (...args: unknown[]) => createProfileMock(...args),
     getPreferences: vi.fn(async () => ({
       discoveryRadiusKm: 25,
       industries: [],
@@ -114,6 +116,7 @@ describe('AppStore.saveProfile rollback', () => {
     getProfileMock.mockResolvedValue(initialProfile)
     updateProfileMock.mockReset()
     updateProfileMock.mockRejectedValue(new Error('Network failure'))
+    createProfileMock.mockReset()
   })
 
   afterEach(() => {
@@ -143,6 +146,29 @@ describe('AppStore.saveProfile rollback', () => {
     const cached = appCache.read<UserProfile>('profile')
     expect(cached.value?.fullName).toBe(initialProfile.fullName)
     expect(result.current.state.profile.data?.fullName).toBe(initialProfile.fullName)
+    expect(result.current.state.profile.status).toBe('success')
+  })
+
+  it('creates the profile when none exists yet', async () => {
+    const newProfile: UserProfile = {
+      ...initialProfile,
+      id: 'user-2',
+      fullName: 'Jane New',
+    }
+    getProfileMock.mockRejectedValue(new Error('Not found'))
+    createProfileMock.mockResolvedValue(newProfile)
+    const { result } = renderHook(() => useAppStore(), { wrapper })
+
+    await waitFor(() => {
+      expect(result.current.state.profile.status).toBe('error')
+    })
+
+    await act(async () => {
+      await result.current.saveProfile({ fullName: 'Jane New' })
+    })
+
+    expect(createProfileMock).toHaveBeenCalledWith(expect.objectContaining({ fullName: 'Jane New' }))
+    expect(result.current.state.profile.data).toEqual(newProfile)
     expect(result.current.state.profile.status).toBe('success')
   })
 })

@@ -50,6 +50,50 @@ Réponse : `200 OK`
 | `interests` | `string[]` | Centres d'intérêt à mettre en avant pour la découverte. |
 | `eventTypes` | `string[]` | Types d'évènements suggérés à l'utilisateur. |
 
+## Création du profil
+
+`POST /profile`
+
+Permet d'initialiser le profil d'un utilisateur n'en possédant pas encore. Tous les champs listés ci-dessous sont optionnels mais
+peuvent être fournis dès l'inscription pour éviter un second passage par l'écran d'édition.
+
+### Schéma `ProfileCreateRequest`
+
+```json
+{
+  "fullName": "Jane Doe",
+  "headline": "Product Manager",
+  "bio": "Bio optionnelle",
+  "company": "Meetinity",
+  "position": "Head of Product",
+  "skills": ["Product", "Management"],
+  "experiences": [
+    {
+      "id": "exp-1",
+      "title": "Product Manager",
+      "company": "Meetinity",
+      "startDate": "2021-01-01",
+      "description": "Responsable de la roadmap produit"
+    }
+  ],
+  "links": [
+    { "label": "LinkedIn", "url": "https://linkedin.com/in/jane" }
+  ],
+  "interests": ["Tech", "IA"],
+  "location": "Paris",
+  "availability": "Soirées",
+  "avatarUrl": "https://cdn.example.com/avatars/user-1.png",
+  "preferences": {
+    "discoveryRadiusKm": 25,
+    "industries": ["Tech"],
+    "interests": ["IA"],
+    "eventTypes": ["Meetup"]
+  }
+}
+```
+
+Réponse : `201 Created` avec le profil complet (`UserProfile`).
+
 ## Mise à jour du profil
 
 `PUT /profile`
@@ -63,6 +107,23 @@ La requête accepte un objet partiel décrivant les champs à mettre à jour. Le
   "fullName": "Jane Updated",
   "headline": "Head of Product",
   "bio": "Nouvelle bio",
+  "company": "Meetinity",
+  "position": "CPO",
+  "skills": ["Product", "Leadership"],
+  "experiences": [
+    {
+      "id": "exp-1",
+      "title": "Product Manager",
+      "company": "Meetinity",
+      "startDate": "2021-01-01",
+      "endDate": null,
+      "description": "Responsable de la roadmap produit"
+    }
+  ],
+  "links": [
+    { "label": "LinkedIn", "url": "https://linkedin.com/in/jane" },
+    { "label": "Site", "url": "https://janedoe.dev" }
+  ],
   "interests": ["Tech", "Design"],
   "location": "Lyon",
   "availability": "Week-end",
@@ -81,8 +142,13 @@ La requête accepte un objet partiel décrivant les champs à mettre à jour. Le
 | Champ | Type | Description |
 | --- | --- | --- |
 | `fullName` | `string` (optionnel) | Mise à jour du nom complet. |
-| `headline` | `string` (optionnel) | Nouveau titre professionnel. |
+| `headline` | `string` (optionnel) | Nouveau titre professionnel court. |
 | `bio` | `string` (optionnel) | Description libre. |
+| `company` | `string` (optionnel) | Société actuelle affichée sur le profil. |
+| `position` | `string` (optionnel) | Poste occupé chez la société actuelle. |
+| `skills` | `string[]` (optionnel) | Compétences clés, tableau remplacé intégralement. |
+| `experiences` | [`ProfileExperience[]`](#schéma-profileexperience) (optionnel) | Parcours professionnel. Le tableau entier est remplacé à chaque mise à jour. |
+| `links` | [`ProfileLink[]`](#schéma-profilelink) (optionnel) | Liens publics vers les réseaux sociaux ou portfolio. |
 | `interests` | `string[]` (optionnel) | Liste remplacée intégralement lors de l'envoi. |
 | `location` | `string` (optionnel) | Nouvelle localisation. |
 | `availability` | `string` (optionnel) | Nouvelle disponibilité affichée. |
@@ -90,6 +156,24 @@ La requête accepte un objet partiel décrivant les champs à mettre à jour. Le
 | `preferences` | [`ProfilePreferences`](#schéma-profilepreferences) (optionnel) | Valeurs remplacées intégralement. Les tableaux envoyés vides annulent les valeurs précédentes. |
 
 Réponse : `200 OK` avec le `UserProfile` complet (même schéma que `GET /profile`).
+
+### Schéma `ProfileExperience`
+
+| Champ | Type | Description |
+| --- | --- | --- |
+| `id` | `string` (optionnel) | Identifiant unique de l'expérience (utile pour la synchronisation). |
+| `title` | `string` | Intitulé du poste occupé. |
+| `company` | `string` | Société associée. |
+| `startDate` | `string` (optionnel) | Date ISO 8601 de début. |
+| `endDate` | `string` ou `null` (optionnel) | Date ISO 8601 de fin (`null` pour un poste en cours). |
+| `description` | `string` (optionnel) | Missions principales ou réalisations. |
+
+### Schéma `ProfileLink`
+
+| Champ | Type | Description |
+| --- | --- | --- |
+| `label` | `string` | Libellé affiché (LinkedIn, Portfolio…). |
+| `url` | `string` | URL absolue vers la ressource. |
 
 ## Upload d'avatar
 
