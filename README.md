@@ -37,13 +37,18 @@ The authentication flow relies on short-lived API tokens issued by the backend. 
 
 ## Environment
 
-Create a `.env` file based on `.env.example` and adjust it to match your backend configuration.
+Create a `.env` file based on `.env.example` and adjust it to match your backend configuration. The defaults mirror the values baked into the application.
 
-| Variable | Description |
-| --- | --- |
-| `VITE_API_BASE_URL` | Base URL of the HTTP API (used for authentication and profile calls). |
-| `VITE_REALTIME_URL` | Optional SSE/WebSocket endpoint used by the realtime client (falls back to `/realtime`). |
-| `VITE_OAUTH_REDIRECT_URI` | Public callback URL registered on your OAuth providers (informational for documentation/tests). |
+| Variable | Default | Description |
+| --- | --- | --- |
+| `VITE_API_BASE_URL` | `http://localhost:8080` | Base URL for all REST calls performed by the Axios client. |
+| `VITE_API_TIMEOUT` | `30000` | Request timeout (ms) applied to HTTP calls. |
+| `VITE_TOKEN_REFRESH_THRESHOLD` | `120000` | Refresh window (ms) used to renew tokens before expiry. |
+| `VITE_REALTIME_URL` | _unset_ | Optional SSE/WebSocket endpoint overriding `${VITE_API_BASE_URL}/realtime`. |
+| `VITE_OAUTH_REDIRECT_URI` | _unset_ | Optional callback URL reference for OAuth documentation/tests. |
+| `VITE_ENABLE_ANALYTICS` | _unset_ | Optional flag enabling performance telemetry. |
+
+> Offline resilience is handled internally by the messaging store and cannot be toggled via environment variables.
 
 ## Setup
 
