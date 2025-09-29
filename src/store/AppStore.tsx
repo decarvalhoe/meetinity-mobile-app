@@ -31,8 +31,24 @@ import {
   type MessagingSessionSnapshot,
   type RealtimeMessaging,
 } from '../services/realtimeMessaging'
+import { appCache, type CachePolicy } from '../lib/cache'
 
 const STORAGE_KEY = 'meetinity-app-store'
+const PROFILE_CACHE_KEY = 'profile'
+const MATCHES_CACHE_KEY = 'matches'
+const MATCH_META_CACHE_KEY = 'matches:meta'
+const EVENTS_CACHE_KEY = 'events:list'
+const EVENT_DETAILS_CACHE_KEY = 'events:details'
+const CONVERSATIONS_CACHE_KEY = 'conversations'
+const MESSAGES_CACHE_KEY = 'messages'
+
+const PROFILE_CACHE_POLICY: CachePolicy = { maxAge: 5 * 60 * 1000, staleWhileRevalidate: 15 * 60 * 1000 }
+const MATCHES_CACHE_POLICY: CachePolicy = { maxAge: 90 * 1000, staleWhileRevalidate: 5 * 60 * 1000 }
+const MATCH_META_CACHE_POLICY: CachePolicy = { maxAge: 90 * 1000, staleWhileRevalidate: 5 * 60 * 1000 }
+const EVENTS_CACHE_POLICY: CachePolicy = { maxAge: 2 * 60 * 1000, staleWhileRevalidate: 15 * 60 * 1000 }
+const EVENT_DETAIL_CACHE_POLICY: CachePolicy = { maxAge: 10 * 60 * 1000, staleWhileRevalidate: 30 * 60 * 1000 }
+const CONVERSATIONS_CACHE_POLICY: CachePolicy = { maxAge: 60 * 1000, staleWhileRevalidate: 5 * 60 * 1000 }
+const MESSAGES_CACHE_POLICY: CachePolicy = { maxAge: 30 * 1000, staleWhileRevalidate: 5 * 60 * 1000 }
 
 type Status = 'idle' | 'loading' | 'success' | 'error'
 
@@ -515,15 +531,15 @@ const reducer = (state: AppState, action: AppAction): AppState => {
 
 interface AppStoreValue {
   state: AppState
-  refreshProfile: () => Promise<void>
+  refreshProfile: (options?: { force?: boolean }) => Promise<void>
   saveProfile: (update: ProfileUpdatePayload) => Promise<void>
-  refreshMatches: () => Promise<void>
+  refreshMatches: (options?: { force?: boolean }) => Promise<void>
   acceptMatch: (matchId: string) => Promise<void>
   declineMatch: (matchId: string) => Promise<void>
   refreshEvents: (filters?: EventListFilters, page?: number) => Promise<void>
   toggleEventRegistration: (eventId: string, register: boolean) => Promise<void>
   loadEventDetails: (eventId: string, options?: { force?: boolean }) => Promise<EventDetails | undefined>
-  refreshConversations: () => Promise<void>
+  refreshConversations: (options?: { force?: boolean }) => Promise<void>
   loadMessages: (conversationId: string, options?: { force?: boolean }) => Promise<void>
   sendMessage: (conversationId: string, content: string, attachments?: Attachment[]) => Promise<void>
   markConversationRead: (conversationId: string) => void
@@ -536,14 +552,51 @@ interface AppStoreValue {
 const AppStoreContext = createContext<AppStoreValue | undefined>(undefined)
 
 const hydrateState = (): AppState => {
+  const base = createInitialState()
+  const cachedProfile = appCache.read<UserProfile>(PROFILE_CACHE_KEY)
+  if (cachedProfile.value) {
+    base.profile = { status: 'success', data: cachedProfile.value }
+  }
+  const cachedMatches = appCache.read<MatchFeedItem[]>(MATCHES_CACHE_KEY)
+  if (cachedMatches.value) {
+    base.matches = { status: 'success', data: cachedMatches.value }
+  }
+  const cachedMatchMeta = appCache.read<MatchFeedMeta | null>(MATCH_META_CACHE_KEY)
+  if (cachedMatchMeta.value) {
+    base.matchFeedMeta = cachedMatchMeta.value
+  }
+  const cachedEvents = appCache.read<EventListState>(EVENTS_CACHE_KEY)
+  if (cachedEvents.value) {
+    base.events = {
+      status: 'success',
+      data: {
+        ...base.events.data,
+        ...cachedEvents.value,
+        filters: cachedEvents.value.filters ?? base.events.data.filters,
+        items: cachedEvents.value.items ?? base.events.data.items,
+      },
+    }
+  }
+  const cachedEventDetails = appCache.read<Record<string, EventDetails | undefined>>(EVENT_DETAILS_CACHE_KEY)
+  if (cachedEventDetails.value) {
+    base.eventDetails = cachedEventDetails.value
+  }
+  const cachedConversations = appCache.read<Conversation[]>(CONVERSATIONS_CACHE_KEY)
+  if (cachedConversations.value) {
+    base.conversations = { status: 'success', data: cachedConversations.value }
+  }
+  const cachedMessages = appCache.read<Record<string, Message[]>>(MESSAGES_CACHE_KEY)
+  if (cachedMessages.value) {
+    base.messages = cachedMessages.value
+  }
+
   if (typeof window === 'undefined') {
-    return createInitialState()
+    return base
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return createInitialState()
+    if (!raw) return base
     const parsed = JSON.parse(raw) as Partial<AppState>
-    const base = createInitialState()
     const merged: AppState = {
       ...base,
       ...parsed,
@@ -725,6 +778,13 @@ const isOfflineError = (error: unknown): boolean => {
   return false
 }
 
+const serializeFilters = (filters: EventListFilters): string => {
+  const entries = Object.entries(filters)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .sort(([a], [b]) => a.localeCompare(b))
+  return JSON.stringify(Object.fromEntries(entries))
+}
+
 const applyDecisionToMatches = (
   matches: MatchFeedItem[],
   matchId: string,
@@ -755,7 +815,6 @@ const applyDecisionToMatches = (
 export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { token, user } = useAuth()
   const [state, dispatch] = useReducer(reducer, undefined, hydrateState)
-
   const triggerMatchNotifications = useCallback(
     (matches: MatchFeedItem[]) => {
       if (matches.length === 0) return
@@ -803,6 +862,50 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const realtimeMessagingRef = useRef<RealtimeMessaging | null>(null)
   const isProcessingQueueRef = useRef(false)
+
+  useEffect(() => {
+    if (state.profile.status === 'success' && state.profile.data) {
+      appCache.write(PROFILE_CACHE_KEY, state.profile.data, PROFILE_CACHE_POLICY)
+    }
+  }, [state.profile])
+
+  useEffect(() => {
+    if (state.matches.data.length > 0 || state.matches.status === 'success') {
+      appCache.write(MATCHES_CACHE_KEY, state.matches.data, MATCHES_CACHE_POLICY)
+    }
+  }, [state.matches.data, state.matches.status])
+
+  useEffect(() => {
+    if (state.matchFeedMeta) {
+      appCache.write(MATCH_META_CACHE_KEY, state.matchFeedMeta, MATCH_META_CACHE_POLICY)
+    } else {
+      appCache.invalidate(MATCH_META_CACHE_KEY)
+    }
+  }, [state.matchFeedMeta])
+
+  useEffect(() => {
+    if (state.events.data.items.length > 0 || state.events.status === 'success') {
+      appCache.write(EVENTS_CACHE_KEY, state.events.data, EVENTS_CACHE_POLICY)
+    }
+  }, [state.events.data, state.events.status])
+
+  useEffect(() => {
+    if (Object.keys(state.eventDetails).length > 0) {
+      appCache.write(EVENT_DETAILS_CACHE_KEY, state.eventDetails, EVENT_DETAIL_CACHE_POLICY)
+    }
+  }, [state.eventDetails])
+
+  useEffect(() => {
+    if (state.conversations.data.length > 0 || state.conversations.status === 'success') {
+      appCache.write(CONVERSATIONS_CACHE_KEY, state.conversations.data, CONVERSATIONS_CACHE_POLICY)
+    }
+  }, [state.conversations.data, state.conversations.status])
+
+  useEffect(() => {
+    if (Object.keys(state.messages).length > 0) {
+      appCache.write(MESSAGES_CACHE_KEY, state.messages, MESSAGES_CACHE_POLICY)
+    }
+  }, [state.messages])
 
   const commitMatches = useCallback(
     (
@@ -860,7 +963,11 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           payload: { id: item.id, patch: { status: 'sending', attempts: item.attempts + 1, error: undefined } },
         })
         try {
-          const delivered = await messagingService.sendMessage(token, item.conversationId, item.content, item.attachments)
+          const delivered = await messagingService.sendMessage(
+            item.conversationId,
+            item.content,
+            item.attachments,
+          )
           const resolved: Message = {
             ...delivered,
             clientGeneratedId: item.clientGeneratedId,
@@ -897,24 +1004,44 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [token])
 
-  const refreshProfile = useCallback(async () => {
-    if (!token) return
-    dispatch({ type: 'profile/loading' })
-    try {
-      const profile = await profileService.getProfile(token)
-      dispatch({ type: 'profile/success', payload: profile })
-    } catch (error) {
-      dispatch({ type: 'profile/error', error: (error as Error).message })
-    }
-  }, [token])
+  const refreshProfile = useCallback(
+    async (options?: { force?: boolean }) => {
+      if (!token) return
+      const cached = appCache.read<UserProfile>(PROFILE_CACHE_KEY)
+      if (!options?.force && cached.value && !cached.shouldRevalidate) {
+        if (state.profile.status === 'idle') {
+          dispatch({ type: 'profile/success', payload: cached.value })
+        }
+        return
+      }
+      if (!cached.value || options?.force) {
+        dispatch({ type: 'profile/loading' })
+      } else {
+        dispatch({ type: 'profile/success', payload: cached.value })
+      }
+      try {
+        const profile = await profileService.getProfile()
+        dispatch({ type: 'profile/success', payload: profile })
+        appCache.write(PROFILE_CACHE_KEY, profile, PROFILE_CACHE_POLICY)
+      } catch (error) {
+        if (!cached.value) {
+          dispatch({ type: 'profile/error', error: (error as Error).message })
+        } else if (import.meta.env.DEV) {
+          console.warn('Failed to refresh profile, serving cached data', error)
+        }
+      }
+    },
+    [token, state.profile.status, dispatch],
+  )
 
   const saveProfile = useCallback(
     async (update: ProfileUpdatePayload) => {
       if (!token) return
       dispatch({ type: 'profile/loading' })
       try {
-        const profile = await profileService.updateProfile(token, update)
+        const profile = await profileService.updateProfile(update)
         dispatch({ type: 'profile/success', payload: profile })
+        appCache.write(PROFILE_CACHE_KEY, profile, PROFILE_CACHE_POLICY)
       } catch (error) {
         dispatch({ type: 'profile/error', error: (error as Error).message })
         throw error
@@ -923,19 +1050,38 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [token],
   )
 
-  const refreshMatches = useCallback(async () => {
-    if (!token) return
-    dispatch({ type: 'matches/loading' })
-    try {
-      const [feed, status] = await Promise.all([
-        matchingService.getFeed(token),
-        matchingService.getStatus(token).catch(() => undefined),
-      ])
-      commitMatches(feed.items, { meta: feed.meta, status, source: 'initial' })
-    } catch (error) {
-      dispatch({ type: 'matches/error', error: (error as Error).message })
-    }
-  }, [token, commitMatches])
+  const refreshMatches = useCallback(
+    async (options?: { force?: boolean }) => {
+      if (!token) return
+      const cachedMatches = appCache.read<MatchFeedItem[]>(MATCHES_CACHE_KEY)
+      const cachedMeta = appCache.read<MatchFeedMeta | null>(MATCH_META_CACHE_KEY)
+      if (!options?.force && cachedMatches.value && !cachedMatches.shouldRevalidate) {
+        if (state.matches.status === 'idle') {
+          commitMatches(cachedMatches.value, { meta: cachedMeta.value ?? null, source: 'cache' })
+        }
+        return
+      }
+      if (!cachedMatches.value || options?.force) {
+        dispatch({ type: 'matches/loading' })
+      } else {
+        commitMatches(cachedMatches.value, { meta: cachedMeta.value ?? null, source: 'cache' })
+      }
+      try {
+        const [feed, status] = await Promise.all([
+          matchingService.getFeed(),
+          matchingService.getStatus().catch(() => undefined),
+        ])
+        commitMatches(feed.items, { meta: feed.meta, status, source: 'initial' })
+      } catch (error) {
+        if (!cachedMatches.value) {
+          dispatch({ type: 'matches/error', error: (error as Error).message })
+        } else if (import.meta.env.DEV) {
+          console.warn('Failed to refresh matches feed, using cached data', error)
+        }
+      }
+    },
+    [token, commitMatches, state.matches.status],
+  )
 
   const performSwipe = useCallback(
     async (matchId: string, decision: SwipeDecision) => {
@@ -949,7 +1095,7 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const pendingAction: PendingSwipeAction = { id: matchId, decision, clientTimestamp: timestamp }
       dispatch({ type: 'matches/pending/add', payload: pendingAction })
       try {
-        const result = await matchingService.syncLikes(token, { likes: [pendingAction] })
+        const result = await matchingService.syncLikes({ likes: [pendingAction] })
         const failedIds = new Set(result.failed.map((item) => item.id))
         if (result.processed.includes(matchId) || failedIds.has(matchId)) {
           dispatch({ type: 'matches/pending/remove', payload: [matchId] })
@@ -1002,7 +1148,7 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!token) return
     if (state.pendingMatchActions.length === 0) return
     try {
-      const result = await matchingService.syncLikes(token, { likes: state.pendingMatchActions })
+      const result = await matchingService.syncLikes({ likes: state.pendingMatchActions })
       if (result.processed.length > 0) {
         dispatch({ type: 'matches/pending/remove', payload: result.processed })
       }
@@ -1048,12 +1194,30 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const refreshEvents = useCallback(
     async (filters: EventListFilters = {}, page = 1) => {
       if (!token) return
-      dispatch({ type: 'events/loading', payload: { append: page > 1 } })
       const sanitizedFilters = Object.fromEntries(
         Object.entries(filters).filter(([, value]) => value !== undefined && value !== ''),
       ) as EventListFilters
+      const filterSignature = serializeFilters(sanitizedFilters)
+      const cachedEvents = appCache.read<EventListState>(EVENTS_CACHE_KEY)
+      const cachedSignature = cachedEvents.value ? serializeFilters(cachedEvents.value.filters ?? {}) : null
+      const canUseCache =
+        page === 1 && cachedEvents.value && cachedSignature === filterSignature && !cachedEvents.shouldRevalidate
+      if (!canUseCache) {
+        dispatch({ type: 'events/loading', payload: { append: page > 1 } })
+      } else if (state.events.status === 'idle') {
+        dispatch({
+          type: 'events/success',
+          payload: {
+            ...cachedEvents.value,
+            filters: cachedEvents.value.filters ?? sanitizedFilters,
+          },
+        })
+        if (!cachedEvents.shouldRevalidate) {
+          return
+        }
+      }
       try {
-        const response = await eventsService.list(token, { ...sanitizedFilters, page })
+        const response = await eventsService.list({ ...sanitizedFilters, page })
         const shouldAppend = page > 1
         const baseState = eventsStateRef.current
         const mergedItems = shouldAppend
@@ -1078,10 +1242,14 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
         dispatch({ type: 'events/success', payload: nextState })
       } catch (error) {
-        dispatch({ type: 'events/error', error: (error as Error).message })
+        if (!cachedEvents.value) {
+          dispatch({ type: 'events/error', error: (error as Error).message })
+        } else if (import.meta.env.DEV) {
+          console.warn('Failed to refresh events, serving cached list', error)
+        }
       }
     },
-    [token],
+    [token, state.events.status],
   )
 
   const toggleEventRegistration = useCallback(
@@ -1139,9 +1307,9 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       })
       try {
         if (register) {
-          await eventsService.join(token, eventId)
+          await eventsService.join(eventId)
         } else {
-          await eventsService.leave(token, eventId)
+          await eventsService.leave(eventId)
         }
         dispatch({ type: 'events/pending/remove', payload: actionId })
       } catch (error) {
@@ -1174,9 +1342,9 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       try {
         if (action.register) {
-          await eventsService.join(token, action.eventId)
+          await eventsService.join(action.eventId)
         } else {
-          await eventsService.leave(token, action.eventId)
+          await eventsService.leave(action.eventId)
         }
         dispatch({ type: 'events/pending/remove', payload: action.id })
       } catch (error) {
@@ -1244,7 +1412,7 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return cached
       }
       try {
-        const details = await eventsService.details(token, eventId)
+        const details = await eventsService.details(eventId)
         dispatch({ type: 'events/detail/cache', payload: details })
         return details
       } catch (error) {
@@ -1257,20 +1425,34 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [token, state.eventDetails],
   )
 
-  const refreshConversations = useCallback(async () => {
-    if (!token) return
-    dispatch({ type: 'conversations/loading' })
-    try {
-      const conversations = await messagingService.listConversations(token)
-      dispatch({ type: 'conversations/success', payload: conversations })
-    } catch (error) {
-      if (isOfflineError(error)) {
-        dispatch({ type: 'conversations/success', payload: conversationsRef.current })
+  const refreshConversations = useCallback(
+    async (options?: { force?: boolean }) => {
+      if (!token) return
+      const cached = appCache.read<Conversation[]>(CONVERSATIONS_CACHE_KEY)
+      if (!options?.force && cached.value && !cached.shouldRevalidate) {
+        if (state.conversations.status === 'idle') {
+          dispatch({ type: 'conversations/success', payload: cached.value })
+        }
         return
       }
-      dispatch({ type: 'conversations/error', error: (error as Error).message })
-    }
-  }, [token])
+      if (!cached.value || options?.force) {
+        dispatch({ type: 'conversations/loading' })
+      } else {
+        dispatch({ type: 'conversations/success', payload: cached.value })
+      }
+      try {
+        const conversations = await messagingService.listConversations()
+        dispatch({ type: 'conversations/success', payload: conversations })
+      } catch (error) {
+        if (isOfflineError(error) && cached.value) {
+          dispatch({ type: 'conversations/success', payload: cached.value })
+          return
+        }
+        dispatch({ type: 'conversations/error', error: (error as Error).message })
+      }
+    },
+    [token, state.conversations.status],
+  )
 
   const loadMessages = useCallback(
     async (conversationId: string, options?: { force?: boolean }) => {
@@ -1282,7 +1464,7 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       }
       try {
-        const messages = await messagingService.listMessages(token, conversationId)
+        const messages = await messagingService.listMessages(conversationId)
         dispatch({ type: 'messages/hydrate', payload: { conversationId, messages } })
       } catch (error) {
         if (isOfflineError(error)) {
@@ -1355,7 +1537,7 @@ export const AppStoreProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       dispatch({ type: 'messages/read', payload: { conversationId } })
       realtimeMessagingRef.current?.markConversationRead(conversationId)
       if (!token) return
-      void messagingService.markConversationRead(token, conversationId).catch((error) => {
+      void messagingService.markConversationRead(conversationId).catch((error) => {
         if (!isOfflineError(error)) {
           console.warn('Unable to mark conversation as read', error)
         }

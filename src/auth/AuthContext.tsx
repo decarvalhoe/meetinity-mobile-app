@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import AuthService, { User } from '../services/AuthService'
-import { AUTH_TOKEN_STORAGE_KEY } from './constants'
+import AuthService, { type User } from '../services/AuthService'
+import apiClient, { type TokenUpdate } from '../services/apiClient'
+import { AUTH_REFRESH_TOKEN_STORAGE_KEY, AUTH_TOKEN_STORAGE_KEY } from './constants'
 
 interface AuthContextType {
   user: User | null
@@ -8,7 +9,7 @@ interface AuthContextType {
   isAuthenticated: boolean
   isLoading: boolean
   login: (provider: 'google' | 'linkedin') => Promise<void>
-  setToken: (token: string) => Promise<void>
+  setToken: (token: string, options?: Omit<TokenUpdate, 'accessToken'>) => Promise<void>
   logout: () => void
 }
 
@@ -38,18 +39,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = useCallback(() => {
     localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY)
+    localStorage.removeItem(AUTH_REFRESH_TOKEN_STORAGE_KEY)
+    apiClient.clearTokens()
     setTokenState(null)
     setUser(null)
   }, [])
 
   const setToken = useCallback(
-    async (newToken: string) => {
+    async (newToken: string, options?: Omit<TokenUpdate, 'accessToken'>) => {
       try {
         const isValid = await AuthService.verify(newToken)
         if (!isValid) {
           throw new Error('Token verification failed')
         }
         localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, newToken)
+        if (options?.refreshToken) {
+          localStorage.setItem(AUTH_REFRESH_TOKEN_STORAGE_KEY, options.refreshToken)
+        }
+        apiClient.setTokens({ accessToken: newToken, ...options })
         setTokenState(newToken)
         const profile = await AuthService.profile()
         setUser(profile)
@@ -68,6 +75,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [])
 
   useEffect(() => {
+    return apiClient.addAuthErrorListener((error) => {
+      console.warn('Authentication error detected, clearing session', error)
+      logout()
+      notifyAuthError(AUTH_FAILURE_MESSAGE, error)
+    })
+  }, [logout, notifyAuthError])
+
+  useEffect(() => {
     const bootstrap = async () => {
       const storedToken = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)
       if (!storedToken) {
@@ -76,7 +91,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       try {
-        await setToken(storedToken)
+        const refreshToken = localStorage.getItem(AUTH_REFRESH_TOKEN_STORAGE_KEY) ?? undefined
+        await setToken(storedToken, { refreshToken })
       } catch (error) {
         console.warn('Unable to restore session from storage', error)
       } finally {

@@ -7,6 +7,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest",
+    "test:unit": "vitest run src --reporter=basic",
+    "test:integration": "vitest run tests/realtime --reporter=basic",
+    "test:e2e": "vitest run tests/e2e --reporter=basic",
     "lint": "eslint src --ext ts,tsx"
   },
   "dependencies": {

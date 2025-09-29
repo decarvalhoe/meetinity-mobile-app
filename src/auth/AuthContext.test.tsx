@@ -3,7 +3,8 @@ import React from 'react'
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { AuthProvider, useAuth } from './AuthContext'
 import AuthService from '../services/AuthService'
-import { AUTH_TOKEN_STORAGE_KEY } from './constants'
+import apiClient from '../services/apiClient'
+import { AUTH_REFRESH_TOKEN_STORAGE_KEY, AUTH_TOKEN_STORAGE_KEY } from './constants'
 
 vi.mock('../services/AuthService', () => ({
   default: {
@@ -11,6 +12,14 @@ vi.mock('../services/AuthService', () => ({
     handleCallback: vi.fn(),
     verify: vi.fn(),
     profile: vi.fn(),
+  },
+}))
+
+vi.mock('../services/apiClient', () => ({
+  default: {
+    setTokens: vi.fn(),
+    clearTokens: vi.fn(),
+    addAuthErrorListener: vi.fn(() => () => {}),
   },
 }))
 
@@ -22,6 +31,11 @@ type AuthServiceMock = {
 }
 
 const mockedAuthService = AuthService as unknown as AuthServiceMock
+const mockedApiClient = apiClient as unknown as {
+  setTokens: ReturnType<typeof vi.fn>
+  clearTokens: ReturnType<typeof vi.fn>
+  addAuthErrorListener: ReturnType<typeof vi.fn>
+}
 
 const ContextReader: React.FC = () => {
   const auth = useAuth()
@@ -84,13 +98,19 @@ describe('AuthContext', () => {
     await waitFor(() => expect(contextValue).not.toBeNull())
 
     await act(async () => {
-      await contextValue!.setToken('fresh-token')
+      await contextValue!.setToken('fresh-token', { refreshToken: 'refresh-token', expiresIn: 3600 })
     })
 
     expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBe('fresh-token')
+    expect(localStorage.getItem(AUTH_REFRESH_TOKEN_STORAGE_KEY)).toBe('refresh-token')
     expect(contextValue!.user?.email).toBe('grace@example.com')
     expect(contextValue!.isAuthenticated).toBe(true)
     expect(mockedAuthService.verify).toHaveBeenCalledWith('fresh-token')
+    expect(mockedApiClient.setTokens).toHaveBeenCalledWith({
+      accessToken: 'fresh-token',
+      refreshToken: 'refresh-token',
+      expiresIn: 3600,
+    })
   })
 
   it('logs out and notifies when token verification fails', async () => {
@@ -157,7 +177,9 @@ describe('AuthContext', () => {
     })
 
     expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull()
+    expect(localStorage.getItem(AUTH_REFRESH_TOKEN_STORAGE_KEY)).toBeNull()
     expect(contextValue!.isAuthenticated).toBe(false)
     expect(contextValue!.user).toBeNull()
+    expect(mockedApiClient.clearTokens).toHaveBeenCalled()
   })
 })

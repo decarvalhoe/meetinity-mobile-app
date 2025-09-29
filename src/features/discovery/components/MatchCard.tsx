@@ -8,7 +8,7 @@ interface MatchCardProps {
   onDecline?: (id: string) => void
 }
 
-const MatchCard: React.FC<MatchCardProps> = ({ suggestion, onAccept, onDecline }) => (
+const MatchCardComponent: React.FC<MatchCardProps> = ({ suggestion, onAccept, onDecline }) => (
   <article className="card">
     <div className="card__header">
       <div className="card__avatar card__avatar--placeholder">
@@ -38,6 +38,14 @@ const MatchCard: React.FC<MatchCardProps> = ({ suggestion, onAccept, onDecline }
       </button>
     </div>
   </article>
+)
+
+const MatchCard = React.memo(
+  MatchCardComponent,
+  (prev, next) =>
+    prev.suggestion === next.suggestion &&
+    prev.onAccept === next.onAccept &&
+    prev.onDecline === next.onDecline,
 )
 
 export default MatchCard

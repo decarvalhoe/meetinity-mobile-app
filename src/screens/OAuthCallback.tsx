@@ -38,10 +38,13 @@ const OAuthCallback: React.FC = () => {
 
     const completeAuthentication = async () => {
       try {
-        const resolvedToken = token
+        const resolvedTokens = token
           ? await AuthService.handleCallback(provider, code, state, token)
           : await AuthService.handleCallback(provider, code, state)
-        await setToken(resolvedToken)
+        await setToken(resolvedTokens.accessToken, {
+          refreshToken: resolvedTokens.refreshToken ?? undefined,
+          expiresIn: resolvedTokens.expiresIn ?? undefined,
+        })
         if (isActive) {
           navigate('/profile', { replace: true })
         }

@@ -1,4 +1,4 @@
-import http from './http'
+import apiClient from './apiClient'
 import type {
   MatchFeedResponse,
   MatchStatusSnapshot,
@@ -7,41 +7,31 @@ import type {
   SyncLikesResult,
 } from '../features/discovery/types'
 
-const withToken = (token: string) => ({
-  headers: {
-    Authorization: `Bearer ${token}`,
-  },
-})
-
 const matchingService = {
-  async getSuggestions(token: string): Promise<MatchSuggestion[]> {
-    const response = await http.get<MatchSuggestion[]>('/matches', withToken(token))
-    return response.data
+  async getSuggestions(): Promise<MatchSuggestion[]> {
+    return apiClient.get<MatchSuggestion[]>('/matches')
   },
-  async getFeed(token: string, options?: { cursor?: string }): Promise<MatchFeedResponse> {
-    const response = await http.get<MatchFeedResponse>('/matches/feed', {
-      ...withToken(token),
+  async getFeed(options?: { cursor?: string }): Promise<MatchFeedResponse> {
+    return apiClient.get<MatchFeedResponse>('/matches/feed', {
       params: options?.cursor ? { cursor: options.cursor } : undefined,
     })
-    return response.data
   },
-  async getStatus(token: string): Promise<MatchStatusSnapshot> {
-    const response = await http.get<MatchStatusSnapshot>('/matches/status', withToken(token))
-    return response.data
+  async getStatus(): Promise<MatchStatusSnapshot> {
+    return apiClient.get<MatchStatusSnapshot>('/matches/status')
   },
-  async accept(token: string, matchId: string): Promise<void> {
-    await http.post(`/matches/${matchId}/accept`, undefined, withToken(token))
+  async accept(matchId: string): Promise<void> {
+    await apiClient.post(`/matches/${matchId}/accept`)
   },
-  async decline(token: string, matchId: string): Promise<void> {
-    await http.post(`/matches/${matchId}/decline`, undefined, withToken(token))
+  async decline(matchId: string): Promise<void> {
+    await apiClient.post(`/matches/${matchId}/decline`)
   },
-  async syncLikes(token: string, payload: SyncLikesPayload): Promise<SyncLikesResult> {
-    const response = await http.post<SyncLikesResult>('/matches/likes/sync', payload, withToken(token))
+  async syncLikes(payload: SyncLikesPayload): Promise<SyncLikesResult> {
+    const response = await apiClient.post<SyncLikesResult>('/matches/likes/sync', payload)
     return {
-      processed: response.data.processed ?? [],
-      failed: response.data.failed ?? [],
-      feed: response.data.feed,
-      status: response.data.status,
+      processed: response.processed ?? [],
+      failed: response.failed ?? [],
+      feed: response.feed,
+      status: response.status,
     }
   },
 }

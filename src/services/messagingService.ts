@@ -1,23 +1,14 @@
-import http from './http'
+import apiClient from './apiClient'
 import type { Attachment, Conversation, Message } from '../features/messaging/types'
 
-const withToken = (token: string) => ({
-  headers: {
-    Authorization: `Bearer ${token}`,
-  },
-})
-
 const messagingService = {
-  async listConversations(token: string): Promise<Conversation[]> {
-    const response = await http.get<Conversation[]>('/conversations', withToken(token))
-    return response.data
+  async listConversations(): Promise<Conversation[]> {
+    return apiClient.get<Conversation[]>('/conversations')
   },
-  async listMessages(token: string, conversationId: string): Promise<Message[]> {
-    const response = await http.get<Message[]>(`/conversations/${conversationId}/messages`, withToken(token))
-    return response.data
+  async listMessages(conversationId: string): Promise<Message[]> {
+    return apiClient.get<Message[]>(`/conversations/${conversationId}/messages`)
   },
   async sendMessage(
-    token: string,
     conversationId: string,
     content: string,
     attachments?: Attachment[],
@@ -32,11 +23,10 @@ const messagingService = {
         url: attachment.url ?? attachment.previewUrl,
       }))
     }
-    const response = await http.post<Message>(`/conversations/${conversationId}/messages`, payload, withToken(token))
-    return response.data
+    return apiClient.post<Message>(`/conversations/${conversationId}/messages`, payload)
   },
-  async markConversationRead(token: string, conversationId: string): Promise<void> {
-    await http.post(`/conversations/${conversationId}/read`, undefined, withToken(token))
+  async markConversationRead(conversationId: string): Promise<void> {
+    await apiClient.post(`/conversations/${conversationId}/read`)
   },
 }
 

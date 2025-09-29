@@ -1,24 +1,15 @@
-import http from './http'
+import apiClient from './apiClient'
 import type { ProfilePreferences, ProfileUpdatePayload, UserProfile } from '../features/profile/types'
 
-const withToken = (token: string) => ({
-  headers: {
-    Authorization: `Bearer ${token}`,
-  },
-})
-
 const profileService = {
-  async getProfile(token: string): Promise<UserProfile> {
-    const response = await http.get<UserProfile>('/profile', withToken(token))
-    return response.data
+  async getProfile(): Promise<UserProfile> {
+    return apiClient.get<UserProfile>('/profile')
   },
-  async updateProfile(token: string, update: ProfileUpdatePayload): Promise<UserProfile> {
-    const response = await http.put<UserProfile>('/profile', update, withToken(token))
-    return response.data
+  async updateProfile(update: ProfileUpdatePayload): Promise<UserProfile> {
+    return apiClient.put<UserProfile>('/profile', update)
   },
-  async getPreferences(token: string): Promise<ProfilePreferences> {
-    const response = await http.get<ProfilePreferences>('/profile/preferences', withToken(token))
-    return response.data
+  async getPreferences(): Promise<ProfilePreferences> {
+    return apiClient.get<ProfilePreferences>('/profile/preferences')
   },
 }
 
