@@ -1,12 +1,24 @@
-export interface UserProfile {
+export interface AvatarCropSettings {
+  x: number
+  y: number
+  width: number
+  height: number
+  scale?: number
+  rotation?: number
+}
+
+export type AvatarUploadStatus = 'cropping' | 'ready' | 'uploading'
+
+export interface AvatarUploadDraft {
   id: string
-  fullName: string
-  headline: string
-  avatarUrl?: string
-  bio?: string
-  interests: string[]
-  location?: string
-  availability?: string
+  dataUrl: string
+  fileName: string
+  mimeType: string
+  size: number
+  crop?: AvatarCropSettings
+  status: AvatarUploadStatus
+  updatedAt: string
+  error?: string
 }
 
 export interface ProfilePreferences {
@@ -23,4 +35,25 @@ export interface ProfileUpdatePayload {
   interests?: string[]
   location?: string
   availability?: string
+  preferences?: Partial<ProfilePreferences>
+  avatarUpload?: AvatarUploadDraft | null
+  avatarUrl?: string
+}
+
+export interface ProfileDraft {
+  profile: ProfileUpdatePayload
+  preferences: Partial<ProfilePreferences>
+  updatedAt: string
+}
+
+export interface UserProfile {
+  id: string
+  fullName: string
+  headline: string
+  avatarUrl?: string
+  bio?: string
+  interests: string[]
+  location?: string
+  availability?: string
+  preferences?: ProfilePreferences
 }
