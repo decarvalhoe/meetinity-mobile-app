@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import EventCard from '../components/EventCard'
 import { useAppStore } from '../../../store/AppStore'
 import '../../shared.css'
+import { OfflinePlaceholder, ScreenState, useOnlineStatus } from '../../shared'
 
 const MyEventsScreen: React.FC = () => {
   const navigate = useNavigate()
   const { state, toggleEventRegistration } = useAppStore()
+  const isOnline = useOnlineStatus()
 
   const registeredEvents = useMemo(
     () => state.events.data.items.filter((event) => event.isRegistered),
@@ -21,9 +23,6 @@ const MyEventsScreen: React.FC = () => {
     return map
   }, [state.pendingEventRegistrations])
 
-  const isOffline =
-    typeof navigator !== 'undefined' && navigator.onLine === false && state.events.status === 'error'
-
   return (
     <section aria-labelledby="my-events-title" className="events-screen">
       <header className="section-header">
@@ -33,17 +32,25 @@ const MyEventsScreen: React.FC = () => {
         </button>
       </header>
 
-      {isOffline && (
-        <p className="loading">Mode hors connexion : affichage des données disponibles.</p>
+      {!isOnline && (
+        <OfflinePlaceholder
+          description="Les événements enregistrés restent disponibles hors connexion."
+          retryLabel="Recharger"
+          onRetry={() => navigate('..')}
+        />
       )}
 
       {registeredEvents.length === 0 ? (
-        <div className="empty-state">
-          <p>Vous n'êtes inscrit à aucun événement pour le moment.</p>
-          <button type="button" className="primary" onClick={() => navigate('..')}>
-            Parcourir les événements
-          </button>
-        </div>
+        <ScreenState
+          tone="info"
+          title="Aucun événement inscrit"
+          description="Explorez le catalogue pour vous inscrire aux événements qui vous intéressent."
+          actions={
+            <button type="button" className="primary" onClick={() => navigate('..')}>
+              Parcourir les événements
+            </button>
+          }
+        />
       ) : (
         <div className="events-grid">
           {registeredEvents.map((event) => {
@@ -57,7 +64,7 @@ const MyEventsScreen: React.FC = () => {
                   isProcessing={Boolean(pendingInfo?.pending)}
                 />
                 {pendingInfo?.error && (
-                  <p className="error-state" role="status">
+                  <p className="state state--inline state--error" role="status">
                     Action en attente ({pendingInfo.error})
                   </p>
                 )}

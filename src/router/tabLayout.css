@@ -2,54 +2,165 @@
   display: grid;
   grid-template-rows: auto 1fr auto;
   min-height: 100vh;
-  background: var(--background, #f8fafc);
+  background: var(--color-background);
 }
 
 .app-shell__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px;
-  background: var(--surface, #ffffff);
-  border-bottom: 1px solid var(--border, #e5e7eb);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.app-shell__header h1 {
+  margin: 0;
+  font-size: var(--font-size-xl);
+  line-height: var(--line-height-tight);
+}
+
+.app-shell__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
 }
 
 .app-shell__content {
-  padding: 24px;
+  padding: var(--space-xl) var(--space-lg);
   overflow-y: auto;
 }
 
 .app-shell__tabs {
+  position: sticky;
+  bottom: 0;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  border-top: 1px solid var(--border, #e5e7eb);
-  background: var(--surface, #ffffff);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.05);
+}
+
+.app-shell__tab-link {
+  text-decoration: none;
+  color: inherit;
 }
 
 .app-shell__tab {
+  position: relative;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 12px 0;
-  text-decoration: none;
-  color: var(--muted, #6b7280);
-  font-weight: 500;
-  gap: 4px;
+  gap: var(--space-2xs);
+  padding: var(--space-sm) var(--space-md);
+  color: var(--color-muted);
+  font-weight: var(--font-weight-medium);
+  transition: color var(--duration-fast) var(--easing-standard);
+}
+
+.app-shell__tab:hover {
+  color: var(--color-primary);
 }
 
 .app-shell__tab--active {
-  color: var(--primary, #6c5ce7);
-  border-top: 2px solid var(--primary, #6c5ce7);
-  margin-top: -2px;
+  color: var(--color-primary);
+}
+
+.app-shell__tab-icon {
+  font-size: var(--font-size-lg);
+  line-height: 1;
+}
+
+.app-shell__tab-label {
+  font-size: var(--font-size-sm);
+}
+
+.app-shell__tab-badge {
+  position: absolute;
+  top: calc(var(--space-3xs) * -1);
+  right: calc(var(--space-3xs) * -1);
+  background: var(--color-accent);
+  color: var(--color-text-on-primary);
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-2xs);
+  min-width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.app-shell__tab-indicator {
+  position: absolute;
+  left: var(--space-sm);
+  right: var(--space-sm);
+  bottom: 0;
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
+}
+
+.accessibility-menu {
+  position: relative;
+}
+
+.accessibility-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+}
+
+.accessibility-menu__panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--space-xs));
+  min-width: 240px;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--color-border);
+  display: grid;
+  gap: var(--space-md);
+  z-index: var(--z-overlay, 100);
+}
+
+.accessibility-menu__panel h2 {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--font-size-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+}
+
+.accessibility-menu__options {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.accessibility-menu__option {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-size-sm);
 }
 
 @media (max-width: 768px) {
   .app-shell__content {
-    padding: 16px;
+    padding: var(--space-lg);
   }
 
-  .messaging-grid {
-    grid-template-columns: 1fr;
+  .app-shell__tab-label {
+    display: none;
+  }
+
+  .accessibility-menu__panel {
+    right: auto;
+    left: 0;
   }
 }

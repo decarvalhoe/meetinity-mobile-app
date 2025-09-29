@@ -2,6 +2,14 @@ import React, { useEffect, useMemo } from 'react'
 import ConversationList from '../components/ConversationList'
 import { useAppStore } from '../../../store/AppStore'
 import '../../shared.css'
+import {
+  ErrorState,
+  LoadingState,
+  OfflinePlaceholder,
+  ScreenState,
+  SkeletonBlock,
+  useOnlineStatus,
+} from '../../shared'
 
 interface ConversationsScreenProps {
   onSelectConversation?: (conversationId: string) => void
@@ -9,6 +17,7 @@ interface ConversationsScreenProps {
 
 const ConversationsScreen: React.FC<ConversationsScreenProps> = ({ onSelectConversation }) => {
   const { state, refreshConversations, setActiveConversation } = useAppStore()
+  const isOnline = useOnlineStatus()
 
   const sortedConversations = useMemo(() => {
     const conversations = state.conversations.data ?? []
@@ -28,8 +37,6 @@ const ConversationsScreen: React.FC<ConversationsScreenProps> = ({ onSelectConve
     onSelectConversation?.(conversationId)
   }
 
-  const isOffline = typeof navigator !== 'undefined' && navigator.onLine === false
-
   return (
     <section className="messaging-conversations" aria-labelledby="conversations-title">
       <header className="messaging-conversations__header">
@@ -45,20 +52,43 @@ const ConversationsScreen: React.FC<ConversationsScreenProps> = ({ onSelectConve
           {state.conversations.status === 'loading' ? 'Actualisation…' : 'Actualiser'}
         </button>
       </header>
-      {isOffline && (
-        <p role="status" className="messaging-conversations__offline">
-          Mode hors ligne activé — affichage des conversations en cache
-        </p>
+      {!isOnline && (
+        <OfflinePlaceholder
+          description="Les conversations existantes restent accessibles hors connexion."
+          onRetry={refreshConversations}
+        />
       )}
       {state.conversations.status === 'error' && (
-        <div className="error-state" role="alert">
-          Impossible de récupérer les conversations. <button onClick={refreshConversations}>Réessayer</button>
-        </div>
+        <ErrorState
+          description={state.conversations.error ?? 'Impossible de récupérer les conversations.'}
+          onRetry={refreshConversations}
+        />
       )}
       {state.conversations.status === 'loading' && sortedConversations.length === 0 ? (
-        <p className="loading">Chargement de vos conversations…</p>
+        <LoadingState
+          title="Chargement de vos conversations"
+          skeleton={
+            <div className="skeleton-group">
+              {[...Array(3)].map((_, index) => (
+                <div key={index} className="skeleton-card">
+                  <div className="skeleton-card__header">
+                    <SkeletonBlock width={48} height={48} shape="circle" />
+                    <div className="skeleton-group">
+                      <SkeletonBlock height={14} width="65%" />
+                      <SkeletonBlock height={12} width="35%" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          }
+        />
       ) : sortedConversations.length === 0 ? (
-        <p className="loading">Aucune conversation pour le moment. Engagez la discussion depuis l’onglet Découverte.</p>
+        <ScreenState
+          tone="info"
+          title="Aucune conversation"
+          description="Engagez la discussion depuis l’onglet Découverte pour voir apparaître vos correspondances ici."
+        />
       ) : (
         <ConversationList
           conversations={sortedConversations}

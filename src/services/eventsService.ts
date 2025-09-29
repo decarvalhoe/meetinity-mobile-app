@@ -1,5 +1,5 @@
 import http from './http'
-import type { EventDetails, EventListFilters, EventListResponse, EventSummary } from '../features/events/types'
+import type { EventDetails, EventListFilters, EventListResponse } from '../features/events/types'
 
 const withToken = (token: string) => ({
   headers: {
